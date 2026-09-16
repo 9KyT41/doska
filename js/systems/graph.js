@@ -1,4 +1,4 @@
-// L3: graph. Гнёзда, рёбра, линковка, отрисовка ниток.
+// L3: graph. Гнёзда, рёбра, линковка, гибкие нитки-кривые.
 const Graph = (() => {
   let svg = null, worldEl = null, linking = null;
 
@@ -20,19 +20,34 @@ const Graph = (() => {
              w: el ? el.offsetWidth : 200, h: el ? el.offsetHeight : 100 };
   }
 
-  function anchor(id, type) {
+  // точка гнезда + нормаль наружу (куда нитка выходит)
+  function anchorN(id, type) {
     const b = nodeBox(id);
-    if (!b) return { x: 0, y: 0 };
-    if (type === 'seq-out') return { x: b.x + b.w, y: b.y + b.h / 2 };
-    if (type === 'seq-in')  return { x: b.x,       y: b.y + b.h / 2 };
-    if (type === 'par')     return { x: b.x + b.w / 2, y: b.y };
-    return { x: b.x + b.w / 2, y: b.y + b.h };
+    if (!b) return { x: 0, y: 0, nx: 1, ny: 0 };
+    if (type === 'seq-out') return { x: b.x + b.w,   y: b.y + b.h / 2, nx:  1, ny: 0 };
+    if (type === 'seq-in')  return { x: b.x,         y: b.y + b.h / 2, nx: -1, ny: 0 };
+    if (type === 'par')     return { x: b.x + b.w/2, y: b.y,           nx:  0, ny:-1 };
+    return { x: b.x + b.w / 2, y: b.y + b.h, nx: 0, ny: 1 };
   }
 
-  function edgeAnchors(e) {
-    if (e.type === 'seq') return { a: anchor(e.from, 'seq-out'), b: anchor(e.to, 'seq-in') };
-    if (e.type === 'par') return { a: anchor(e.from, 'par'), b: anchor(e.to, 'par') };
-    return { a: anchor(e.from, 'add'), b: anchor(e.to, 'add') };
+  function relOf(socketType) {
+    if (socketType === 'seq-in' || socketType === 'seq-out') return 'seq';
+    if (socketType === 'par') return 'par';
+    return 'add';
+  }
+
+  function edgeSockets(e) {
+    if (e.type === 'seq') return ['seq-out', 'seq-in'];
+    if (e.type === 'par') return ['par', 'par'];
+    return ['add', 'add'];
+  }
+
+  function curvePath(a, b) {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const k = Math.max(40, Math.min(160, dist * 0.4));
+    return 'M ' + a.x + ' ' + a.y +
+      ' C ' + (a.x + a.nx * k) + ' ' + (a.y + a.ny * k) + ', ' +
+              (b.x + b.nx * k) + ' ' + (b.y + b.ny * k) + ', ' + b.x + ' ' + b.y;
   }
 
   function renderEdges() {
@@ -41,16 +56,15 @@ const Graph = (() => {
     const data = Project.getData();
     if (!data) return;
     (data.edges || []).forEach(e => {
-      const { a, b } = edgeAnchors(e);
-      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      hit.setAttribute('x1', a.x); hit.setAttribute('y1', a.y);
-      hit.setAttribute('x2', b.x); hit.setAttribute('y2', b.y);
+      const sk = edgeSockets(e);
+      const d = curvePath(anchorN(e.from, sk[0]), anchorN(e.to, sk[1]));
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      hit.setAttribute('d', d);
       hit.setAttribute('class', 'edge-hit');
       hit.dataset.edgeId = e.id;
       s.appendChild(hit);
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      line.setAttribute('d', d);
       line.setAttribute('class', 'edge edge-' + e.type);
       s.appendChild(line);
     });
@@ -83,21 +97,23 @@ const Graph = (() => {
 
   function startLink(nodeId, socketType) {
     const s = ensureSvg();
-    const a = anchor(nodeId, socketType);
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('class', 'edge-temp');
-    line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
-    line.setAttribute('x2', a.x); line.setAttribute('y2', a.y);
-    s.appendChild(line);
-    linking = { fromId: nodeId, type: socketType, temp: line };
+    const a = anchorN(nodeId, socketType);
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('class', 'edge-temp edge-temp-' + relOf(socketType));
+    p.setAttribute('d', 'M ' + a.x + ' ' + a.y + ' L ' + a.x + ' ' + a.y);
+    s.appendChild(p);
+    linking = { fromId: nodeId, type: socketType, temp: p, a: a };
   }
 
   function moveLink(e) {
     if (!linking) return;
     const w = Compose.toWorld(e.clientX, e.clientY);
-    const a = anchor(linking.fromId, linking.type);
-    linking.temp.setAttribute('x1', a.x); linking.temp.setAttribute('y1', a.y);
-    linking.temp.setAttribute('x2', w.x); linking.temp.setAttribute('y2', w.y);
+    const a = linking.a;
+    const dist = Math.hypot(w.x - a.x, w.y - a.y);
+    const k = Math.max(30, Math.min(140, dist * 0.4));
+    linking.temp.setAttribute('d',
+      'M ' + a.x + ' ' + a.y +
+      ' C ' + (a.x + a.nx * k) + ' ' + (a.y + a.ny * k) + ', ' + w.x + ' ' + w.y + ', ' + w.x + ' ' + w.y);
   }
 
   function endLink(e) {

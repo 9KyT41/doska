@@ -218,5 +218,22 @@ html, body { margin: 0; height: 100%; }
 .edge-temp { stroke: var(--mat-socket-color, #6cf); stroke-width: 2;
              stroke-dasharray: 5 5; pointer-events: none; }
 
+/* Цвет отношения: гнездо и нитка одного типа одного цвета */
+.socket[data-socket="seq-in"], .socket[data-socket="seq-out"] { background: var(--socket-seq, #7ee081); }
+.socket[data-socket="par"]  { background: var(--socket-par, #c792ea); }
+.socket[data-socket="add"]  { background: var(--socket-add, #f78c6c); }
+
+/* Нитки — кривые (path), без заливки, цвет по типу */
+.edge, .edge-hit, .edge-temp { fill: none; }
+.edge-seq  { stroke: var(--socket-seq, #7ee081); }
+.edge-par  { stroke: var(--socket-par, #c792ea); }
+.edge-add  { stroke: var(--socket-add, #f78c6c); }
+.edge-temp-seq { stroke: var(--socket-seq, #7ee081); }
+.edge-temp-par { stroke: var(--socket-par, #c792ea); }
+.edge-temp-add { stroke: var(--socket-add, #f78c6c); }
+
+/* Нитка под курсором утолщается: подсказка «dblclick удалит меня» */
+.edge-hit:hover + .edge { stroke-width: 4; }
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
