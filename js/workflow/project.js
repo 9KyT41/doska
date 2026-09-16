@@ -42,7 +42,7 @@ const Project = (() => {
     return {
       meta: { name: name || 'Без имени', created: Date.now(),
               modified: Date.now(), specVersion: '0.7' },
-      entities: [], edges: [], blocks: []
+      entities: [], edges: [], blocks: [], trash: []
     };
   }
 

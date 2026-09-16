@@ -1,4 +1,4 @@
-// L3: compose-движок. Выделение, удаление, драг нод, пан/зум доски.
+// L3: compose-движок. Выделение, удаление через корзину, возврат, драг, пан/зум.
 const Compose = (() => {
   const sel = new Set();
   let scale = 1, ox = 0, oy = 0;
@@ -13,7 +13,7 @@ const Compose = (() => {
   }
   function toWorld(sx, sy) { return { x: (sx - ox) / scale, y: (sy - oy) / scale }; }
 
-  // --- выделение и удаление ---
+  // --- выделение ---
   function elOf(id) {
     return document.querySelector('.node[data-node-id="' + id + '"]');
   }
@@ -26,12 +26,24 @@ const Compose = (() => {
     Array.from(sel).forEach(id => setSel(id, false));
     sel.clear();
   }
+  function isEditing() {
+    const a = document.activeElement;
+    return a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+  }
+
+  // --- удаление = выселение в корзину (живёт в проекте, переживает сейв) ---
   function deleteNodes(ids) {
     const data = Project.getData();
     if (!data || !ids.length) return;
     const set = new Set(ids);
-    data.entities = (data.entities || []).filter(n => !set.has(n.id));
+    const removed = (data.entities || []).filter(n => set.has(n.id));
+    if (!removed.length) return;
+    data.entities = data.entities.filter(n => !set.has(n.id));
+    // TODO шаг 3: рёбра удалённых нод тоже укладывать в корзину
     data.edges = (data.edges || []).filter(e => !set.has(e.from) && !set.has(e.to));
+    if (!data.trash) data.trash = [];
+    const now = Date.now();
+    removed.forEach(n => { n.deletedAt = now; data.trash.push(n); });
     clearSel();
     Render.renderAll(data);
     Project.markDirty();
@@ -48,12 +60,27 @@ const Compose = (() => {
       return !hasText && !hasImage;
     });
     if (!empty.length) { alert('Пустых нод нет.'); return; }
-    if (!confirm('Удалить пустых нод: ' + empty.length + '?')) return;
+    if (!confirm('Удалить пустых нод в корзину: ' + empty.length + '?')) return;
     deleteNodes(empty.map(n => n.id));
   }
-  function isEditing() {
-    const a = document.activeElement;
-    return a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+
+  // --- корзина: вернуть / очистить ---
+  function restoreLast() {
+    const data = Project.getData();
+    if (!data || !data.trash || !data.trash.length) { alert('Корзина пуста.'); return; }
+    const n = data.trash.pop();
+    delete n.deletedAt;
+    data.entities.push(n);
+    Render.renderAll(data);
+    Project.markDirty();
+    Bus.emit('entity:restored', n);
+  }
+  function clearTrash() {
+    const data = Project.getData();
+    if (!data || !data.trash || !data.trash.length) { alert('Корзина пуста.'); return; }
+    if (!confirm('Очистить корзину НАВСЕГДА? Нод: ' + data.trash.length)) return;
+    data.trash = [];
+    Project.markDirty();
   }
 
   // --- позиция ноды ---
@@ -82,7 +109,7 @@ const Compose = (() => {
     }
   }
 
-  // --- автопан у краёв окна, пока тащим ноду ---
+  // --- автопан у краёв, пока тащим ноду ---
   function tick() {
     raf = 0;
     if (!drag || drag.type !== 'node') return;
@@ -128,7 +155,7 @@ const Compose = (() => {
     boardEl.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       if (e.target.isContentEditable) return;   // в режиме правки мышь работает с текстом
-      e.preventDefault();                       // хват ноды/доски без нативного выделения
+      e.preventDefault();                        // хват без нативного выделения
       const ae = document.activeElement;
       if (ae && ae.isContentEditable) ae.blur();
       pointer = { x: e.clientX, y: e.clientY };
@@ -196,6 +223,11 @@ const Compose = (() => {
     document.addEventListener('keydown', e => {
       if (isEditing()) return;
       if (e.key === 'Delete' && sel.size) { e.preventDefault(); deleteSelected(); }
+      if ((e.ctrlKey || e.metaKey) &&
+          (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')) {
+        e.preventDefault();
+        restoreLast();
+      }
       if (e.key === 'Enter' && sel.size === 1) {
         const id = Array.from(sel)[0];
         const data = Project.getData();
@@ -207,6 +239,6 @@ const Compose = (() => {
     });
   }
 
-  return { init, deleteSelected, deleteEmpty, deleteNodes, fitAll,
-           selected: () => sel };
+  return { init, deleteSelected, deleteEmpty, deleteNodes,
+           restoreLast, clearTrash, fitAll, selected: () => sel };
 })();

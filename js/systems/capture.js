@@ -196,6 +196,7 @@ const Capture = (() => {
 
   function init() {
     pill = buildMic();
+    setPill('idle');
     Bus.on('project:save', () => { flushMedia(); });
 
     document.addEventListener('keydown', e => {

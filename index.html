@@ -34,7 +34,7 @@
     Compose.init();
     Capture.init();
     Menu.init();
-    Menu.setTree([
+        Menu.setTree([
       { label: 'Файл', children: [
         { label: 'Создать проект', action: function () { Project.createNew(); } },
         { label: 'Открыть проект…', action: function () { Project.open(); } },
@@ -43,7 +43,9 @@
       ]},
       { label: 'Правка', children: [
         { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
-        { label: 'Удалить пустые ноды…',     action: function () { Compose.deleteEmpty(); } }
+        { label: 'Удалить пустые ноды…',     action: function () { Compose.deleteEmpty(); } },
+        { label: 'Вернуть из корзины (Ctrl+Z)', action: function () { Compose.restoreLast(); } },
+        { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
       ]},
       { label: 'Настройки', children: [
         { label: 'Тема', children: THEMES.map(function (t) {
