@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="board" class="board">
-    <div class="board-hint">Доска пуста. Шаг 1b: проект умеет жить на диске.</div>
+    <div class="board-hint">Доска пуста. Шаг 2a: нажми N и думай вслух.</div>
   </div>
 
   <script src="js/core/bus.js"></script>
@@ -17,11 +17,18 @@
   <script src="js/systems/themes.js"></script>
   <script src="js/systems/sounds.js"></script>
   <script src="js/workflow/project.js"></script>
+  <script src="js/core/registry.js"></script>
+  <script src="js/core/entity.js"></script>
+  <script src="js/components/thought.js"></script>
+  <script src="js/systems/render.js"></script>
+  <script src="js/systems/capture.js"></script>
   <script src="js/ui/menu.js"></script>
   <script>
     Themes.init();
     Sounds.init();
+    Render.init(document.getElementById('board'));
     Project.init();
+    Capture.init();
     Menu.init();
     Menu.setTree([
       { label: 'Файл', children: [

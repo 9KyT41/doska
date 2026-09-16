@@ -79,5 +79,44 @@ html, body { margin: 0; height: 100%; }
 .submenu > .menu-item { padding-left: 26px; }
 .submenu .submenu > .menu-item { padding-left: 42px; }
 
+/* Нода: скруглённая карточка, материал из темы, размер по содержимому.
+   Пустая — маленькая, но видимая. */
+
+/* Название ноды: человечья метка, при захвате не спрашивается */
+.node-title {
+  outline: none;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-bottom: 1px dashed var(--ink-muted);
+  margin-bottom: 4px;
+  min-height: 1em;
+  cursor: text;
+}
+.node-title:empty::before { content: 'название…'; opacity: .6; }
+
+.node {
+  position: absolute; top: 0; left: 0;
+  min-width: 28px; min-height: 28px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background-color: var(--mat-node-color);
+  background-image: var(--mat-node-texture);
+  border: var(--mat-node-border);
+  box-shadow: var(--mat-node-shadow);
+  border-radius: 10px;
+  color: var(--ink-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.part-thought {
+  outline: none;
+  min-height: 1em;
+  cursor: text;
+}
+.part-thought:empty::before {
+  content: '…';
+  color: var(--ink-muted);
+}
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
