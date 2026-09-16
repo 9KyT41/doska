@@ -1,11 +1,42 @@
 // L4: проектная оболочка. Создать/открыть/сохранить/сохранить как;
-// адаптер хранилища (D11). Проект = папка с data.json внутри.
+// адаптер хранилища (D11); память последней папки; запись медиа.
 const Project = (() => {
-  let dirHandle = null;   // папка проекта (FS Access API) или null
-  let data = null;        // текущий проект в памяти
+  let dirHandle = null;
+  let data = null;
   let dirty = false;
   let saveTimer = null;
   const FILE = 'data.json';
+
+  // --- Память последней папки (IndexedDB) ---
+  function idb() {
+    return new Promise((resolve, reject) => {
+      const rq = indexedDB.open('doska', 1);
+      rq.onupgradeneeded = () => { rq.result.createObjectStore('kv'); };
+      rq.onsuccess = () => resolve(rq.result);
+      rq.onerror = () => reject(rq.error);
+    });
+  }
+  async function idbGet(key) {
+    try {
+      const db = await idb();
+      return await new Promise(resolve => {
+        const rq = db.transaction('kv').objectStore('kv').get(key);
+        rq.onsuccess = () => resolve(rq.result || null);
+        rq.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
+  }
+  async function idbSet(key, val) {
+    try {
+      const db = await idb();
+      await new Promise(resolve => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(val, key);
+        tx.oncomplete = resolve; tx.onerror = resolve;
+      });
+    } catch (e) {}
+  }
+  async function lastDir() { return await idbGet('lastDir'); }
 
   function emptyData(name) {
     return {
@@ -58,6 +89,17 @@ const Project = (() => {
     const f = await fh.getFile();
     return JSON.parse(await f.text());
   }
+  async function writeMedia(name, blob) {
+    if (!dirHandle) return null;
+    try {
+      const media = await dirHandle.getDirectoryHandle('media', { create: true });
+      const fh = await media.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+      return 'media/' + name;
+    } catch (e) { return null; }
+  }
 
   // --- Адаптер B: фолбэк download/upload ---
   function download() {
@@ -100,13 +142,24 @@ const Project = (() => {
     data.meta.modified = Date.now();
     let saved = false;
     try {
-      if (!dirHandle && hasFS()) {
-        try {
-          dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        } catch (pe) {
-          if (pe && pe.name === 'AbortError') return;   // сам отменил
-          dirHandle = null;                              // API не дал → фолбэк
+      if (!dirHandle) {
+        const stored = await lastDir();
+        if (stored) {
+          try {
+            const perm = await stored.requestPermission({ mode: 'readwrite' });
+            if (perm === 'granted') dirHandle = stored;
+          } catch (e) {}
         }
+        if (!dirHandle && hasFS()) {
+          try {
+            dirHandle = await window.showDirectoryPicker({
+              mode: 'readwrite', startIn: stored || undefined });
+          } catch (pe) {
+            if (pe && pe.name === 'AbortError') return;
+            dirHandle = null;
+          }
+        }
+        if (dirHandle) await idbSet('lastDir', dirHandle);
       }
       if (dirHandle) { await writeViaHandle(); saved = true; }
     } catch (e) { /* падаем в фолбэк */ }
@@ -119,16 +172,25 @@ const Project = (() => {
   async function saveAs() {
     if (!data) return;
     const prev = dirHandle;
-    dirHandle = null;            // принудительно спрашиваем новую папку
-    await save(false);
-    if (!dirHandle) dirHandle = prev;   // отменил — старая папка остаётся
+    dirHandle = null;
+    const stored = await lastDir();
+    try {
+      dirHandle = await window.showDirectoryPicker({
+        mode: 'readwrite', startIn: prev || stored || undefined });
+      await idbSet('lastDir', dirHandle);
+      await save(false);
+    } catch (pe) {
+      dirHandle = prev;   // отменил — старая папка остаётся
+    }
   }
 
   async function open() {
     let d = null, dh = null;
     if (hasFS()) {
       try {
-        dh = await window.showDirectoryPicker({ mode: 'readwrite' });
+        const stored = await lastDir();
+        dh = await window.showDirectoryPicker({
+          mode: 'readwrite', startIn: dirHandle || stored || undefined });
         d = await readViaHandle(dh);
       } catch (e) {
         if (e && e.name === 'AbortError') return;
@@ -143,6 +205,7 @@ const Project = (() => {
       try { d = await upload(); } catch (e) { return; }
     }
     dirHandle = dh;
+    if (dirHandle) await idbSet('lastDir', dirHandle);
     data = d;
     dirty = false;
     refreshTitle();
@@ -160,7 +223,7 @@ const Project = (() => {
   }
 
   return {
-    init, createNew, save, saveAs, open, markDirty,
+    init, createNew, save, saveAs, open, markDirty, writeMedia,
     getData: () => data,
     hasHandle: () => !!dirHandle
   };

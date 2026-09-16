@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="board" class="board">
-    <div class="board-hint">Доска пуста. Шаг 2a: нажми N и думай вслух.</div>
+    <div class="board-hint">Доска пуста.</div>
   </div>
 
   <script src="js/core/bus.js"></script>
@@ -20,7 +20,9 @@
   <script src="js/core/registry.js"></script>
   <script src="js/core/entity.js"></script>
   <script src="js/components/thought.js"></script>
+  <script src="js/components/audio.js"></script>
   <script src="js/systems/render.js"></script>
+  <script src="js/systems/compose.js"></script>
   <script src="js/systems/capture.js"></script>
   <script src="js/ui/menu.js"></script>
   <script>
@@ -28,6 +30,7 @@
     Sounds.init();
     Render.init(document.getElementById('board'));
     Project.init();
+    Compose.init();
     Capture.init();
     Menu.init();
     Menu.setTree([
@@ -36,6 +39,10 @@
         { label: 'Открыть проект…', action: function () { Project.open(); } },
         { label: 'Сохранить',       action: function () { Project.save(false); } },
         { label: 'Сохранить как…',  action: function () { Project.saveAs(); } }
+      ]},
+      { label: 'Правка', children: [
+        { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
+        { label: 'Удалить пустые ноды…',     action: function () { Compose.deleteEmpty(); } }
       ]},
       { label: 'Настройки', children: [
         { label: 'Тема', children: THEMES.map(function (t) {
