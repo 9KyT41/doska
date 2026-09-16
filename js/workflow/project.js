@@ -1,5 +1,5 @@
 // L4: проектная оболочка. Создать/открыть/сохранить/сохранить как;
-// адаптер хранилища (D11); память последней папки; запись медиа.
+// адаптер хранилища (D11); память последней папки; запись и чтение медиа.
 const Project = (() => {
   let dirHandle = null;
   let data = null;
@@ -77,11 +77,18 @@ const Project = (() => {
     }
   }
 
+  function serializeData() {
+    const clean = JSON.parse(JSON.stringify(data));
+    (clean.entities || []).forEach(n =>
+      (n.parts || []).forEach(p => { delete p.url; }));
+    return JSON.stringify(clean, null, 2);
+  }
+
   // --- Адаптер A: FS Access API ---
   async function writeViaHandle() {
     const fh = await dirHandle.getFileHandle(FILE, { create: true });
     const w = await fh.createWritable();
-    await w.write(JSON.stringify(data, null, 2));
+    await w.write(serializeData());
     await w.close();
   }
   async function readViaHandle(dh) {
@@ -100,11 +107,23 @@ const Project = (() => {
       return 'media/' + name;
     } catch (e) { return null; }
   }
+  async function readMedia(path) {
+    if (!dirHandle) return null;
+    try {
+      const parts = path.split('/');
+      const name = parts.pop();
+      let dir = dirHandle;
+      for (const seg of parts) dir = await dir.getDirectoryHandle(seg);
+      const fh = await dir.getFileHandle(name);
+      const f = await fh.getFile();
+      return URL.createObjectURL(f);
+    } catch (e) { return null; }
+  }
 
   // --- Адаптер B: фолбэк download/upload ---
   function download() {
-    const blob = new Blob([JSON.stringify(data, null, 2)],
-                          { type: 'application/json' });
+    const blob = new Blob([serializeData()],
+              { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = FILE;
@@ -180,7 +199,7 @@ const Project = (() => {
       await idbSet('lastDir', dirHandle);
       await save(false);
     } catch (pe) {
-      dirHandle = prev;   // отменил — старая папка остаётся
+      dirHandle = prev;
     }
   }
 
@@ -223,7 +242,7 @@ const Project = (() => {
   }
 
   return {
-    init, createNew, save, saveAs, open, markDirty, writeMedia,
+    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia,
     getData: () => data,
     hasHandle: () => !!dirHandle
   };

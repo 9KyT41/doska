@@ -58,7 +58,7 @@ const Compose = (() => {
     });
     document.addEventListener('keydown', e => {
       if (isEditing()) return;   // внутри ноды Delete удаляет буквы, не ноду
-      if ((e.key === 'Delete' || e.key === 'Backspace') && sel.size) {
+      if (e.key === 'Delete' && sel.size) {
         e.preventDefault();
         deleteSelected();
       }
