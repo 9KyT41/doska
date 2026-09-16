@@ -183,5 +183,14 @@ html, body { margin: 0; height: 100%; }
 .node-title[contenteditable="true"],
 .node-title[contenteditable="plaintext-only"] { user-select: text; }
 
+/* Картинка в ноде: миниатюра, масштаб по ширине ноды */
+.part-image-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}
+.part-image-missing { font-size: 12px; color: var(--ink-muted); }
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */

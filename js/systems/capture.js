@@ -1,11 +1,12 @@
-// L3: capture-движок. Клава (N…Enter), paste, голос (зажал микрофон).
-// Голос: машина состояний idle -> starting -> recording -> idle.
+// L3: capture-движок. Клава (N…Enter), paste, голос (зажал микрофон),
+// картинки (drop/paste). Куда целишься — туда и падает.
 const Capture = (() => {
   let pill = null;
   let state = 'idle';
   let cancelRequested = false;
   let pendingDiscard = false;
   let rec = null;
+  let bound = false;              // страховка от двойной регистрации слушателей
   const pendingMedia = [];
 
   function freeSpot(data) {
@@ -30,6 +31,12 @@ const Capture = (() => {
     return node;
   }
 
+  function addThoughtToNode(node, text, source) {
+    Entity.addPart(node, 'thought', { text: text, source: source });
+    Bus.emit('entity:changed', node);
+    Project.markDirty();
+  }
+
   function startEditing(node) {
     Render.editPart(node, 'thought');
   }
@@ -39,7 +46,44 @@ const Capture = (() => {
     return a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
   }
 
-  // --- Пилюля и её состояния ---
+  // --- картинки ---
+  async function addImagePart(node, file) {
+    const url = URL.createObjectURL(file);
+    const image = Entity.addPart(node, 'image', {
+      url: url, file: null, caption: null });
+    Bus.emit('entity:changed', node);
+    Project.markDirty();
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = await Project.writeMedia('i_' + image.id + '.' + ext, file);
+    if (path) { image.file = path; Project.markDirty(); }
+  }
+
+  async function imagesFromFiles(files, targetNode) {
+    const data = Project.getData();
+    if (!data) return;
+    const imgs = Array.from(files).filter(f => f.type && f.type.startsWith('image/'));
+    if (!imgs.length) return;
+    if (targetNode) {                       // целился в ноду — части ложатся в неё
+      for (const f of imgs) await addImagePart(targetNode, f);
+      return;
+    }
+    for (const f of imgs) {                 // иначе — по ноде на картинку, без дублей
+      const pos = freeSpot(data);
+      const node = Entity.createNode(pos.x, pos.y);
+      data.entities.push(node);
+      Bus.emit('entity:created', node);
+      await addImagePart(node, f);
+    }
+  }
+
+  function selectedNode() {
+    const sel = Compose.selected();
+    if (sel.size !== 1) return null;
+    const data = Project.getData();
+    return data && data.entities.find(n => n.id === Array.from(sel)[0]) || null;
+  }
+
+  // --- пилюля и её состояния ---
   function setPill(mode) {
     if (!pill) return;
     pill.classList.remove('rec', 'starting');
@@ -61,7 +105,6 @@ const Capture = (() => {
     p.addEventListener('mouseup', onHoldEnd);
     p.addEventListener('mouseleave', onHoldEnd);
     document.body.appendChild(p);
-    setPill('idle');
     return p;
   }
 
@@ -78,7 +121,7 @@ const Capture = (() => {
     else if (state === 'starting') cancelRequested = true;
   }
 
-  // --- Голос ---
+  // --- голос ---
   async function startVoice() {
     let stream = null;
     try {
@@ -199,6 +242,9 @@ const Capture = (() => {
     setPill('idle');
     Bus.on('project:save', () => { flushMedia(); });
 
+    if (bound) return;    // слушатели регистрируются ровно один раз за сессию
+    bound = true;
+
     document.addEventListener('keydown', e => {
       if (isEditing()) {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -230,13 +276,45 @@ const Capture = (() => {
       if (e.code === 'Space') onHoldEnd();
     });
 
+    // --- paste: картинки и текст, с уважением к выделению ---
     document.addEventListener('paste', e => {
       if (isEditing()) return;
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      if (text && text.trim()) {
-        e.preventDefault();
-        newThoughtNode(text.trim(), 'paste');
+      const items = e.clipboardData && e.clipboardData.items;
+      if (items) {
+        const imgs = [];
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.startsWith('image/')) {
+            const f = items[i].getAsFile();
+            if (f) imgs.push(f);
+          }
+        }
+        if (imgs.length) {
+          e.preventDefault();
+          imagesFromFiles(imgs, selectedNode());
+          return;
+        }
       }
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      if (!text || !text.trim()) return;
+      e.preventDefault();
+      const target = selectedNode();
+      if (target) addThoughtToNode(target, text.trim(), 'paste');
+      else newThoughtNode(text.trim(), 'paste');
+    });
+
+    // --- drop: куда целишься, туда и падает ---
+    document.addEventListener('dragover', e => { e.preventDefault(); });
+    document.addEventListener('drop', e => {
+      e.preventDefault();
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      const nodeEl = e.target.closest ? e.target.closest('.node') : null;
+      let target = null;
+      if (nodeEl) {
+        const data = Project.getData();
+        target = data && data.entities.find(n => n.id === nodeEl.dataset.nodeId) || null;
+      }
+      imagesFromFiles(files, target);
     });
   }
 
