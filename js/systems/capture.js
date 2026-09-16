@@ -203,8 +203,9 @@ const Capture = (() => {
         if (e.key === 'Enter' && !e.shiftKey) {
           if (e.target.classList.contains('node-title')) {
             e.preventDefault();
-            const body = e.target.parentElement.querySelector('.part-thought');
-            if (body) body.focus();
+            const data = Project.getData();
+            const node = data && data.entities.find(n => n.id === e.target.dataset.nodeId);
+            if (node) Render.editPart(node, 'thought');
           } else if (e.target.classList.contains('part-thought')) {
             e.preventDefault();
             e.target.blur();

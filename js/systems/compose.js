@@ -127,6 +127,7 @@ const Compose = (() => {
 
     boardEl.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
+      if (e.target.isContentEditable) return;   // в режиме правки мышь работает с текстом
       pointer = { x: e.clientX, y: e.clientY };
       const nodeElm = e.target.closest('.node');
       if (nodeElm) {
