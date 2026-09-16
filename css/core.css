@@ -1,0 +1,42 @@
+html, body { margin: 0; height: 100%; }
+
+.board {
+  position: fixed; inset: 0;
+  background-color: var(--mat-board-color);
+  background-image: var(--mat-board-texture);
+  color: var(--ink-main);
+  font-family: var(--font-main);
+}
+
+.board-hint {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  background-color: var(--mat-node-color);
+  background-image: var(--mat-node-texture);
+  border: var(--mat-node-border);
+  box-shadow: var(--mat-node-shadow);
+  border-radius: 6px;
+  color: var(--ink-muted);
+}
+
+.panel {
+  position: fixed; top: 10px; right: 10px;
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 10px;
+  background-color: var(--mat-panel-color, var(--mat-node-color));
+  border: var(--mat-panel-border, var(--mat-node-border));
+  box-shadow: var(--mat-node-shadow);
+  border-radius: 6px;
+}
+.panel-label { color: var(--ink-muted); font-size: 12px; }
+.btn {
+  background-color: var(--mat-button-color);
+  border: var(--mat-button-border);
+  color: var(--ink-main);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+/* Будущие .node, .btn, .socket берут материалы из тех же слотов */

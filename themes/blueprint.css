@@ -1,0 +1,17 @@
+:root {
+  --font-main: system-ui, sans-serif;
+  --ink-main: #dfe9f5;
+  --ink-muted: #8fa3bd;
+  --mat-board-color: #12263f;
+  --mat-board-texture:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, transparent 1px 24px);
+  --mat-node-color: #1b3a5c;
+  --mat-node-texture: none;
+  --mat-node-border: 1px solid #3f6ea0;
+  --mat-node-shadow: 0 2px 8px rgba(0,0,0,.5);
+  --mat-button-color: #1b3a5c;
+  --mat-button-border: 1px solid #3f6ea0;
+  --mat-socket-color: #6cf;
+  --line-edge: #dfe9f5;
+}

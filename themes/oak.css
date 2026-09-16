@@ -1,0 +1,23 @@
+:root {
+  --font-main: system-ui, sans-serif;
+  --ink-main: #2b1d0e;
+  --ink-muted: #6b5636;
+
+  /* Материал доски: стилизованные волокна; позже заменимо на png одной строкой */
+  --mat-board-color: #8a5a2b;
+  --mat-board-texture:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 12px);
+
+  /* Материал ноды: бумага поверх дерева */
+  --mat-node-color: #f3e9d2;
+  --mat-node-texture: none;
+  --mat-node-border: 1px solid #b7a179;
+  --mat-node-shadow: 0 2px 6px rgba(0,0,0,.35);
+
+  /* Кнопки и гнёзда: наследуют или переопределяют */
+  --mat-button-color: var(--mat-node-color);
+  --mat-button-border: var(--mat-node-border);
+  --mat-socket-color: #3af;
+  --line-edge: #2b1d0e;
+}
