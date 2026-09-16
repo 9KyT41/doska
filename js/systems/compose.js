@@ -231,7 +231,9 @@ const Compose = (() => {
     }, { passive: false });
 
     boardEl.addEventListener('dblclick', e => {
-      if (!e.target.closest('.node')) { scale = 1; ox = 0; oy = 0; applyView(); }
+      if (e.target.closest('.node') || e.target.closest('.block') ||
+          e.target.closest('.palette') || e.target.closest('.mic-pill')) return;
+      scale = 1; ox = 0; oy = 0; applyView();
     });
 
     document.addEventListener('keydown', e => {

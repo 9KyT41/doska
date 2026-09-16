@@ -133,10 +133,12 @@ const Blocks = (() => {
   // --- inline-имя ---
   function startEdit(label, blockId) {
     label.contentEditable = 'true';
-    label.focus();
+    const bs = boardEl.scrollLeft, bt = boardEl.scrollTop;
+    label.focus({ preventScroll: true });
     const range = document.createRange();
     range.selectNodeContents(label);
     const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    boardEl.scrollLeft = bs; boardEl.scrollTop = bt;
     const commit = () => {
       label.contentEditable = 'false';
       const d = data();

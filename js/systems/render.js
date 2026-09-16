@@ -14,7 +14,7 @@ const Render = (() => {
     t.contentEditable = 'false';
     t.textContent = node.title || '';
     t.dataset.nodeId = node.id;
-    t.addEventListener('dblclick', () => { makeEditable(t); t.focus(); });
+    t.addEventListener('dblclick', () => { makeEditable(t); t.focus({ preventScroll: true }); });
     return t;
   }
 
@@ -38,7 +38,7 @@ const Render = (() => {
         const pel = def.render(part);
         if (pel.classList.contains('part-thought')) {
           pel.contentEditable = 'false';
-          pel.addEventListener('dblclick', () => { makeEditable(pel); pel.focus(); });
+          pel.addEventListener('dblclick', () => { makeEditable(pel); pel.focus({ preventScroll: true }); });
         }
         el.appendChild(pel);
       } else {
@@ -64,7 +64,7 @@ const Render = (() => {
     const target = type === 'thought'
       ? el.querySelector('.part-thought')
       : el.querySelector('.node-title');
-    if (target) { makeEditable(target); target.focus(); }
+    if (target) { makeEditable(target); target.focus({ preventScroll: true }); }
   }
 
   function nodeElement(node) {
