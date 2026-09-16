@@ -1,6 +1,6 @@
-// L3: рендер. Ноды по умолчанию read-only; двойной клик редактирует.
+// L3: рендер. Ноды read-only по умолчанию; dblclick правит; ноды живут в #world.
 const Render = (() => {
-  let boardEl = null;
+  let boardEl = null, worldEl = null;
   const nodeEls = new Map();
 
   function makeEditable(el) {
@@ -61,7 +61,7 @@ const Render = (() => {
       el = document.createElement('div');
       el.className = 'node';
       el.dataset.nodeId = node.id;
-      boardEl.appendChild(el);
+      worldEl.appendChild(el);
       nodeEls.set(node.id, el);
       rebuildNode(el, node);
     }
@@ -79,6 +79,9 @@ const Render = (() => {
 
   function init(board) {
     boardEl = board;
+    worldEl = document.createElement('div');
+    worldEl.id = 'world';
+    boardEl.appendChild(worldEl);
 
     boardEl.addEventListener('input', e => {
       const data = Project.getData();
@@ -99,7 +102,6 @@ const Render = (() => {
       Project.markDirty();
     });
 
-    // курсор ушёл — текст снова read-only
     boardEl.addEventListener('focusout', e => {
       if (e.target.classList &&
           (e.target.classList.contains('part-thought') ||
@@ -117,5 +119,5 @@ const Render = (() => {
     });
   }
 
-  return { init, renderAll, nodeElement, editPart };
+  return { init, renderAll, nodeElement, editPart, getWorld: () => worldEl };
 })();

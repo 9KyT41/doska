@@ -96,6 +96,7 @@ html, body { margin: 0; height: 100%; }
 
 .node {
   position: absolute; top: 0; left: 0;
+  width: max-content;
   min-width: 28px; min-height: 28px;
   max-width: 320px;
   padding: 8px 10px;
@@ -160,6 +161,12 @@ html, body { margin: 0; height: 100%; }
   cursor: text;
   background-color: rgba(127, 127, 127, .10);
 }
+
+/* Пространство: мир ездит и масштабируется целиком */
+.board { overflow: hidden; }
+#world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.node { cursor: grab; }
+.board.panning, .board.panning .node { cursor: grabbing; }
 
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
