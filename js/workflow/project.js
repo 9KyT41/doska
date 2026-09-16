@@ -1,4 +1,5 @@
-// L4: проектная оболочка. Создать/открыть/сохранить; адаптер хранилища (D11).
+// L4: проектная оболочка. Создать/открыть/сохранить/сохранить как;
+// адаптер хранилища (D11). Проект = папка с data.json внутри.
 const Project = (() => {
   let dirHandle = null;   // папка проекта (FS Access API) или null
   let data = null;        // текущий проект в памяти
@@ -16,17 +17,30 @@ const Project = (() => {
 
   function hasFS() { return !!window.showDirectoryPicker; }
 
+  function hint(text) {
+    const el = document.querySelector('.board-hint');
+    if (el) el.textContent = text;
+  }
+
   function refreshTitle() {
-    document.title = data
-      ? 'ДОСКА — ' + data.meta.name + (dirty ? ' *' : '')
-      : 'ДОСКА';
+    const name = data ? data.meta.name : null;
+    document.title = name ? 'ДОСКА — ' + name + (dirty ? ' *' : '') : 'ДОСКА';
+    if (!data) {
+      hint('Доска пуста.');
+    } else if (!dirHandle && data.entities.length === 0) {
+      hint('Проект — это папка с data.json внутри. «Файл → Сохранить» спросит, где дому проекта жить.');
+    } else if (dirHandle) {
+      hint('Проект «' + name + '» живёт в папке «' + dirHandle.name + '». Автосейв включён.');
+    } else {
+      hint('Проект «' + name + '»: папка не выбрана — фолбэк-режим (скачивание файла).');
+    }
     Bus.emit('project:changed', { data: data, dirty: dirty });
   }
 
   function markDirty() {
     dirty = true;
     refreshTitle();
-    if (dirHandle) {                 // автосейв только когда есть ручка папки
+    if (dirHandle) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => save(true), 800);
     }
@@ -102,6 +116,14 @@ const Project = (() => {
     Bus.emit('project:save', { silent: !!silent });
   }
 
+  async function saveAs() {
+    if (!data) return;
+    const prev = dirHandle;
+    dirHandle = null;            // принудительно спрашиваем новую папку
+    await save(false);
+    if (!dirHandle) dirHandle = prev;   // отменил — старая папка остаётся
+  }
+
   async function open() {
     let d = null, dh = null;
     if (hasFS()) {
@@ -138,7 +160,7 @@ const Project = (() => {
   }
 
   return {
-    init, createNew, save, open, markDirty,
+    init, createNew, save, saveAs, open, markDirty,
     getData: () => data,
     hasHandle: () => !!dirHandle
   };

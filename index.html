@@ -25,9 +25,10 @@
     Menu.init();
     Menu.setTree([
       { label: 'Файл', children: [
-        { label: 'Создать',   action: function () { Project.createNew(); } },
-        { label: 'Открыть…',  action: function () { Project.open(); } },
-        { label: 'Сохранить', action: function () { Project.save(false); } }
+        { label: 'Создать проект', action: function () { Project.createNew(); } },
+        { label: 'Открыть проект…', action: function () { Project.open(); } },
+        { label: 'Сохранить',       action: function () { Project.save(false); } },
+        { label: 'Сохранить как…',  action: function () { Project.saveAs(); } }
       ]},
       { label: 'Настройки', children: [
         { label: 'Тема', children: THEMES.map(function (t) {
