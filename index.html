@@ -2,28 +2,37 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>ДОСКА — шаг 0.5</title>
+  <title>ДОСКА — шаг 1a-fix</title>
   <link rel="stylesheet" href="css/core.css">
   <link rel="stylesheet" href="themes/oak.css" id="theme">
 </head>
 <body>
   <div id="board" class="board">
-    <div class="board-hint">Доска пуста. Шаг 0.5: кожа и звук отделимы.</div>
-  </div>
-
-  <div class="panel panel-top">
-    <label class="panel-label" for="theme-select">Тема</label>
-    <select id="theme-select" class="btn"></select>
+    <div class="board-hint">Доска пуста. Шаг 1a-fix: меню приросло к кнопке.</div>
   </div>
 
   <script src="js/core/bus.js"></script>
   <script src="themes/registry.js"></script>
-  <script src="sounds/soundsregistry.js"></script>
+  <script src="sounds/registry.js"></script>
   <script src="js/systems/themes.js"></script>
   <script src="js/systems/sounds.js"></script>
+  <script src="js/ui/menu.js"></script>
   <script>
     Themes.init();
     Sounds.init();
+    Menu.init();
+    Menu.setTree([
+      { label: 'Файл', children: [
+        { label: 'Создать',   action: function () { console.log('TODO: создать'); } },
+        { label: 'Открыть…',  action: function () { console.log('TODO: открыть'); } },
+        { label: 'Сохранить', action: function () { console.log('TODO: сохранить'); } }
+      ]},
+      { label: 'Настройки', children: [
+        { label: 'Тема', children: THEMES.map(function (t) {
+            return { label: t.name, action: function () { Themes.apply(t.id); } };
+          }) }
+      ]}
+    ]);
   </script>
 </body>
 </html>
