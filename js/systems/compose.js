@@ -22,6 +22,12 @@ const Compose = (() => {
     const el = elOf(id);
     if (el) el.classList.toggle('sel', on);
   }
+
+  function setSelection(ids) {
+    clearSel();
+    (ids || []).forEach(id => setSel(id, true));
+  }
+
   function clearSel() {
     Array.from(sel).forEach(id => setSel(id, false));
     sel.clear();
@@ -169,7 +175,8 @@ const Compose = (() => {
         drag = { type: 'node', id: id, moved: false,
                  sx: e.clientX, sy: e.clientY,
                  off: { x: w.x - node.transform.x, y: w.y - node.transform.y } };
-        if (!sel.has(id)) { clearSel(); setSel(id, true); }
+        if (e.ctrlKey || e.metaKey) { setSel(id, !sel.has(id)); }
+        else if (!sel.has(id)) { clearSel(); setSel(id, true); }
       } else {
         drag = { type: 'pan', sx: e.clientX, sy: e.clientY,
                  ox0: ox, oy0: oy, moved: false };
@@ -241,6 +248,6 @@ const Compose = (() => {
     });
   }
 
-    return { init, deleteSelected, deleteEmpty, deleteNodes,
+    return { init, deleteSelected, deleteEmpty, deleteNodes, setSelection,
            restoreLast, clearTrash, fitAll, selected: () => sel, toWorld };
 })();

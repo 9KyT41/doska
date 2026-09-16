@@ -26,39 +26,69 @@
   <script src="js/systems/render.js"></script>
   <script src="js/systems/compose.js"></script>
   <script src="js/systems/graph.js"></script>
+  <script src="js/systems/blocks.js"></script>
   <script src="js/systems/export.js"></script>
   <script src="js/systems/capture.js"></script>
   <script src="js/ui/menu.js"></script>
   <script>
+    function blockMenu() {
+      const items = [
+        { label: 'Сгруппировать выделенное в блок…', action: function () {
+            const t = prompt('Имя блока:', '');
+            if (t === null) return;
+            Blocks.groupSelection(t.trim() || 'Блок');
+            Menu.setTree(buildTree());
+          } },
+        { label: 'Убрать выделенное из блока', action: function () {
+            Blocks.removeSelectionFromBlock();
+            Menu.setTree(buildTree());
+          } }
+      ];
+      const bl = Blocks.list();
+      if (bl.length) {
+        items.push({ label: 'Добавить выделенное в блок', children: bl.map(b => ({
+          label: b.title, action: function () { Blocks.addSelectionTo(b.id); } })) });
+        items.push({ label: 'Удалить блок (ноды останутся)', children: bl.map(b => ({
+          label: b.title, action: function () { Blocks.deleteBlock(b.id); Menu.setTree(buildTree()); } })) });
+      }
+      return items;
+    }
+
+    function buildTree() {
+      return [
+        { label: 'Файл', children: [
+          { label: 'Создать проект', action: function () { Project.createNew(); } },
+          { label: 'Открыть проект…', action: function () { Project.open(); } },
+          { label: 'Сохранить',       action: function () { Project.save(false); } },
+          { label: 'Сохранить как…',  action: function () { Project.saveAs(); } },
+          { label: 'Переименовать проект…', action: function () { Project.rename(); } }
+        ]},
+        { label: 'Правка', children: [
+          { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
+          { label: 'Удалить пустые ноды…',     action: function () { Compose.deleteEmpty(); } },
+          { label: 'Вернуть из корзины (Ctrl+Z)', action: function () { Compose.restoreLast(); } },
+          { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
+        ]},
+        { label: 'Экспорт', children: Export.menuItems() },
+        { label: 'Блок', children: blockMenu() },
+        { label: 'Настройки', children: [
+          { label: 'Тема', children: THEMES.map(function (t) {
+              return { label: t.name, action: function () { Themes.apply(t.id); } };
+            }) }
+        ]}
+      ];
+    }
+
     Themes.init();
     Sounds.init();
     Render.init(document.getElementById('board'));
     Project.init();
     Compose.init();
     Graph.init();
+    Blocks.init();
     Capture.init();
     Menu.init();
-        Menu.setTree([
-      { label: 'Файл', children: [
-        { label: 'Создать проект', action: function () { Project.createNew(); } },
-        { label: 'Открыть проект…', action: function () { Project.open(); } },
-        { label: 'Сохранить',       action: function () { Project.save(false); } },
-        { label: 'Сохранить как…',  action: function () { Project.saveAs(); } },
-        { label: 'Переименовать проект…', action: function () { Project.rename(); } }
-      ]},
-      { label: 'Правка', children: [
-        { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
-        { label: 'Удалить пустые ноды…',     action: function () { Compose.deleteEmpty(); } },
-        { label: 'Вернуть из корзины (Ctrl+Z)', action: function () { Compose.restoreLast(); } },
-        { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
-      ]},
-      { label: 'Экспорт', children: Export.menuItems() },
-      { label: 'Настройки', children: [
-        { label: 'Тема', children: THEMES.map(function (t) {
-            return { label: t.name, action: function () { Themes.apply(t.id); } };
-          }) }
-      ]}
-    ]);
+    Menu.setTree(buildTree());
   </script>
 </body>
 </html>
