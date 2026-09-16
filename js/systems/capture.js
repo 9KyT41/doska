@@ -54,8 +54,8 @@ const Capture = (() => {
     Bus.emit('entity:changed', node);
     Project.markDirty();
     const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-    const path = await Project.writeMedia('i_' + image.id + '.' + ext, file);
-    if (path) { image.file = path; Project.markDirty(); }
+    pendingMedia.push({ part: image, blob: file, name: 'i_' + image.id + '.' + ext });
+    flushMedia();
   }
 
   async function imagesFromFiles(files, targetNode) {

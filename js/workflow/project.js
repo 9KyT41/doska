@@ -120,6 +120,17 @@ const Project = (() => {
     } catch (e) { return null; }
   }
 
+  async function writeText(name, text) {
+    if (!dirHandle) return null;
+    try {
+      const fh = await dirHandle.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(text);
+      await w.close();
+      return name;
+    } catch (e) { return null; }
+  }
+
   // --- Адаптер B: фолбэк download/upload ---
   function download() {
     const blob = new Blob([serializeData()],
@@ -242,7 +253,7 @@ const Project = (() => {
   }
 
   return {
-    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia,
+    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia, writeText,
     getData: () => data,
     hasHandle: () => !!dirHandle
   };
