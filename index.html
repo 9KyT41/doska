@@ -31,29 +31,7 @@
   <script src="js/systems/capture.js"></script>
   <script src="js/ui/menu.js"></script>
   <script>
-    function blockMenu() {
-      const items = [
-        { label: 'Сгруппировать выделенное в блок…', action: function () {
-            const t = prompt('Имя блока:', '');
-            if (t === null) return;
-            Blocks.groupSelection(t.trim() || 'Блок');
-            Menu.setTree(buildTree());
-          } },
-        { label: 'Убрать выделенное из блока', action: function () {
-            Blocks.removeSelectionFromBlock();
-            Menu.setTree(buildTree());
-          } }
-      ];
-      const bl = Blocks.list();
-      if (bl.length) {
-        items.push({ label: 'Добавить выделенное в блок', children: bl.map(b => ({
-          label: b.title, action: function () { Blocks.addSelectionTo(b.id); } })) });
-        items.push({ label: 'Удалить блок (ноды останутся)', children: bl.map(b => ({
-          label: b.title, action: function () { Blocks.deleteBlock(b.id); Menu.setTree(buildTree()); } })) });
-      }
-      return items;
-    }
-
+   
     function buildTree() {
       return [
         { label: 'Файл', children: [
@@ -70,7 +48,6 @@
           { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
         ]},
         { label: 'Экспорт', children: Export.menuItems() },
-        { label: 'Блок', children: blockMenu() },
         { label: 'Настройки', children: [
           { label: 'Тема', children: THEMES.map(function (t) {
               return { label: t.name, action: function () { Themes.apply(t.id); } };

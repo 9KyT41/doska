@@ -207,9 +207,14 @@ const Compose = (() => {
       }
     });
 
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', (e) => {
       if (!drag) return;
       if (drag.type === 'node' && drag.moved) {
+        if (e.altKey) {
+          const d = Project.getData();
+          const n = d && d.entities.find(x => x.id === drag.id);
+          if (n) n.group = null;   // Alt+тянуть = вынуть из блока
+        }
         Project.markDirty();
         Bus.emit('entity:moved', { id: drag.id });
       }
