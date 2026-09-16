@@ -155,9 +155,10 @@ html, body { margin: 0; height: 100%; }
 }
 .node-grip-dot { color: var(--ink-muted); font-size: 12px; user-select: none; }
 .node-grip .node-title { flex: 1; margin-bottom: 0; border-bottom: none; }
-.node-title, .part-thought { cursor: default; }
 .node-title[contenteditable="true"],
-.part-thought[contenteditable="true"] {
+.node-title[contenteditable="plaintext-only"],
+.part-thought[contenteditable="true"],
+.part-thought[contenteditable="plaintext-only"] {
   cursor: text;
   background-color: rgba(127, 127, 127, .10);
 }
@@ -167,6 +168,13 @@ html, body { margin: 0; height: 100%; }
 #world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .node { cursor: grab; }
 .board.panning, .board.panning .node { cursor: grabbing; }
+
+/* Контракт курсора: стрелка вне правки, I-курсор внутри правки */
+.part-thought, .node-title { cursor: default; }
+.part-thought[contenteditable="true"],
+.part-thought[contenteditable="plaintext-only"],
+.node-title[contenteditable="true"],
+.node-title[contenteditable="plaintext-only"] { cursor: text; }
 
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
