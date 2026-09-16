@@ -25,6 +25,7 @@
   <script src="js/components/image.js"></script>
   <script src="js/systems/render.js"></script>
   <script src="js/systems/compose.js"></script>
+  <script src="js/systems/graph.js"></script>
   <script src="js/systems/capture.js"></script>
   <script src="js/ui/menu.js"></script>
   <script>
@@ -33,6 +34,7 @@
     Render.init(document.getElementById('board'));
     Project.init();
     Compose.init();
+    Graph.init();
     Capture.init();
     Menu.init();
         Menu.setTree([

@@ -18,6 +18,10 @@ const Render = (() => {
     return t;
   }
 
+    function socketTitle(st) {
+    return { 'seq-in': 'до', 'seq-out': 'после', 'par': 'вместе', 'add': 'доп' }[st] || '';
+  }
+
   function rebuildNode(el, node) {
     el.innerHTML = '';
     const grip = document.createElement('div');
@@ -43,6 +47,14 @@ const Render = (() => {
         u.textContent = '[часть: ' + part.type + ']';
         el.appendChild(u);
       }
+    });
+    ['seq-in', 'seq-out', 'par', 'add'].forEach(st => {
+      const s = document.createElement('div');
+      s.className = 'socket';
+      s.dataset.socket = st;
+      s.dataset.nodeId = node.id;
+      s.title = socketTitle(st);
+      el.appendChild(s);
     });
   }
 

@@ -155,6 +155,7 @@ const Compose = (() => {
     boardEl.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       if (e.target.isContentEditable) return;   // в режиме правки мышь работает с текстом
+      if (e.target.closest('.socket')) return;   // гнёзда ведёт graph, не compose
       e.preventDefault();                        // хват без нативного выделения
       const ae = document.activeElement;
       if (ae && ae.isContentEditable) ae.blur();
@@ -186,6 +187,7 @@ const Compose = (() => {
         if (drag.moved) {
           const w = toWorld(e.clientX, e.clientY);
           setNodePos(drag.id, w.x - drag.off.x, w.y - drag.off.y);
+          Bus.emit('entity:moving', { id: drag.id });
           if (!raf) raf = requestAnimationFrame(tick);
         }
       } else {
@@ -239,6 +241,6 @@ const Compose = (() => {
     });
   }
 
-  return { init, deleteSelected, deleteEmpty, deleteNodes,
-           restoreLast, clearTrash, fitAll, selected: () => sel };
+    return { init, deleteSelected, deleteEmpty, deleteNodes,
+           restoreLast, clearTrash, fitAll, selected: () => sel, toWorld };
 })();
