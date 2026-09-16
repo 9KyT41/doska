@@ -31,9 +31,7 @@ const Capture = (() => {
   }
 
   function startEditing(node) {
-    const el = document.querySelector(
-      '.node[data-node-id="' + node.id + '"] .part-thought');
-    if (el) el.focus();
+    Render.editPart(node, 'thought');
   }
 
   function isEditing() {

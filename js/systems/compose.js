@@ -62,6 +62,12 @@ const Compose = (() => {
         e.preventDefault();
         deleteSelected();
       }
+      if (e.key === 'Enter' && sel.size === 1) {
+        const id = Array.from(sel)[0];
+        const data = Project.getData();
+        const node = data && data.entities.find(n => n.id === id);
+        if (node) { e.preventDefault(); Render.editPart(node, 'thought'); }
+      }
     });
   }
 

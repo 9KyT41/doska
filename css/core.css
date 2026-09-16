@@ -143,5 +143,23 @@ html, body { margin: 0; height: 100%; }
   outline-offset: 2px;
 }
 
+/* Грип: внешняя планка-ручка ноды (выделение сейчас, драг потом) */
+.node-grip {
+  display: flex; align-items: center; gap: 6px;
+  margin: -8px -10px 6px;
+  padding: 4px 10px;
+  border-radius: 10px 10px 0 0;
+  background-color: rgba(127, 127, 127, .14);
+  cursor: grab;
+}
+.node-grip-dot { color: var(--ink-muted); font-size: 12px; user-select: none; }
+.node-grip .node-title { flex: 1; margin-bottom: 0; border-bottom: none; }
+.node-title, .part-thought { cursor: default; }
+.node-title[contenteditable="true"],
+.part-thought[contenteditable="true"] {
+  cursor: text;
+  background-color: rgba(127, 127, 127, .10);
+}
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
