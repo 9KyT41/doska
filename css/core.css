@@ -176,5 +176,12 @@ html, body { margin: 0; height: 100%; }
 .node-title[contenteditable="true"],
 .node-title[contenteditable="plaintext-only"] { cursor: text; }
 
+/* Выделение текста: только внутри активной зоны правки */
+.board { user-select: none; }
+.part-thought[contenteditable="true"],
+.part-thought[contenteditable="plaintext-only"],
+.node-title[contenteditable="true"],
+.node-title[contenteditable="plaintext-only"] { user-select: text; }
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */
