@@ -242,6 +242,18 @@ const Project = (() => {
     Bus.emit('project:open', { data: data });
   }
 
+    function rename() {
+    if (!data) return;
+    const next = prompt('Имя проекта:', data.meta.name || '');
+    if (next === null) return;
+    const clean = next.trim();
+    if (!clean) return;
+    data.meta.name = clean;
+    refreshTitle();
+    markDirty();
+    Bus.emit('project:renamed', { name: clean });
+  }
+
   function init() {
     document.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -253,7 +265,7 @@ const Project = (() => {
   }
 
   return {
-    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia, writeText,
+    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia, writeText, rename,
     getData: () => data,
     hasHandle: () => !!dirHandle
   };

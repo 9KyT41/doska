@@ -1,7 +1,7 @@
-// L3: export. Детерминированный обход графа + излучатель markdown (D15).
+// L3: export. Один детерминированный обход графа + сменные профили излучения (D15).
 const Export = (() => {
 
-   function titleOf(node) {
+  function titleOf(node) {
     if (node.title && node.title.trim()) return node.title.trim();
     const t = (node.parts || []).find(p => p.type === 'thought' && (p.text || '').trim());
     if (t) {
@@ -35,7 +35,6 @@ const Export = (() => {
     const addOut = edges.some(e => e.type === 'add' && e.from === node.id);
     return addOut && !seq && !par;
   }
-
   function findCycles(nodes, edges) {
     const adj = {};
     nodes.forEach(n => adj[n.id] = []);
@@ -56,9 +55,13 @@ const Export = (() => {
     return { cycles, inCycle };
   }
 
+  // --- общий обход (не зависит от профиля) ---
   function compile() {
     const data = Project.getData();
-    if (!data) return { md: '', warn: { cycles: [] }, stats: null };
+    const empty = { steps: [], annEdges: [], cycles: [], cycleNodes: new Set(),
+                    byId: {}, stats: { steps: 0, ensembles: 0, annotations: 0, cycles: 0, fragments: 0 },
+                    warn: { cycles: [] } };
+    if (!data) return empty;
     const nodes = data.entities || [], edges = data.edges || [];
     const byId = {}; nodes.forEach(n => byId[n.id] = n);
     const annEdges = edges.filter(e => e.type === 'add');
@@ -97,51 +100,75 @@ const Export = (() => {
                        .map(n => n.id).sort();
     frags.forEach(visit);
 
-    const md = emit(data, steps, annEdges, cycles, inCycle, byId);
     return {
-      md,
-      warn: { cycles },
-      stats: {
-        steps: steps.length,
-        ensembles: steps.filter(g => g.length > 1).length,
-        annotations: annEdges.length,
-        cycles: cycles.length,
-        fragments: roots.length + frags.length
-      }
+      steps, annEdges, cycles, cycleNodes: inCycle, byId,
+      stats: { steps: steps.length, ensembles: steps.filter(g => g.length > 1).length,
+               annotations: annEdges.length, cycles: cycles.length,
+               fragments: roots.length + frags.length },
+      warn: { cycles }
     };
   }
 
-  function emit(data, steps, annEdges, cycles, cycleNodes, byId) {
+  // --- профиль: чистый текст (в Word) ---
+  function emitText(res) {
     const L = [];
-    L.push('# ' + ((data.meta && data.meta.name) || 'Без имени'));
-    L.push('');
-    let n = 0;
-    steps.forEach(group => {
-      n++;
-      if (group.length > 1) {
-        L.push('## ' + n + '. Ансамбль (вместе): ' + group.map(id => titleOf(byId[id])).join(' + '));
-      } else {
-        L.push('## ' + n + '. ' + titleOf(byId[group[0]]));
-      }
+    res.steps.forEach(group => {
       group.forEach(id => {
-        const node = byId[id];
-        if (group.length > 1) { L.push(''); L.push('**' + titleOf(node) + '**'); }
-        (node.parts || []).forEach(p => {
-          if (p.type === 'thought' && (p.text || '').trim()) { L.push(''); L.push(p.text.trim()); }
-          else if (p.type === 'audio') {
-            const dur = p.duration ? ', ' + p.duration + 's' : '';
-            L.push(''); L.push('> 🔊 голос' + dur + ' — ' + (p.file || '[не сохранено]'));
-          }
-          else if (p.type === 'image') {
-            L.push(''); L.push('![изображение](' + (p.file || '[не сохранено]') + ')');
-          }
+        const nd = res.byId[id];
+        (nd.parts || []).forEach(p => {
+          if (p.type === 'thought' && (p.text || '').trim()) L.push(p.text.trim());
+          // audio: его расшифровка уже есть частью-мыслью выше -> ничего не дублируем
+          // image: в текстовом профиле игнорируется
         });
       });
       L.push('');
     });
-    if (annEdges.length) {
+    res.annEdges.forEach(e => {
+      const src = res.byId[e.from];
+      if (!src) return;
+      const t = firstThought(src).trim();
+      if (t) L.push(t, '');
+    });
+    return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // --- профиль: markdown с медиа (выключен, вернётся позже) ---
+  function emitNodeBody(nd, L, inEnsemble) {
+    if (inEnsemble && nd.title && nd.title.trim()) L.push('**' + nd.title.trim() + '**');
+    (nd.parts || []).forEach(p => {
+      if (p.type === 'thought' && (p.text || '').trim()) { L.push(p.text.trim()); L.push(''); }
+      else if (p.type === 'audio') {
+        const dur = p.duration ? ', ' + p.duration + 's' : '';
+        L.push('> 🔊 голос' + dur + ' — ' + (p.file || '[не сохранено]')); L.push('');
+      }
+      else if (p.type === 'image') { L.push('![изображение](' + (p.file || '[не сохранено]') + ')'); L.push(''); }
+    });
+  }
+  function emitMarkdown(res) {
+    const byId = res.byId, L = [];
+    const data = Project.getData();
+    L.push('# ' + ((data.meta && data.meta.name) || 'Без имени'));
+    L.push('');
+    let n = 0;
+    res.steps.forEach(group => {
+      if (group.length > 1) {
+        n++;
+        const titled = group.map(id => byId[id]).filter(nd => nd.title && nd.title.trim());
+        L.push('## ' + n + '. Ансамбль (вместе)' +
+               (titled.length ? ': ' + titled.map(t => t.title.trim()).join(' + ') : ''));
+        L.push('');
+        group.forEach(id => emitNodeBody(byId[id], L, true));
+      } else {
+        const nd = byId[group[0]];
+        if (nd.title && nd.title.trim()) {
+          n++; L.push('## ' + n + '. ' + nd.title.trim()); L.push('');
+          emitNodeBody(nd, L, false);
+        } else emitNodeBody(nd, L, false);
+      }
+    });
+    if (res.annEdges.length) {
       L.push('---'); L.push('## Аннотации');
-      annEdges.forEach(e => {
+      res.annEdges.forEach(e => {
         const src = byId[e.from], tgt = byId[e.to];
         if (!src || !tgt) return;
         const txt = firstThought(src).replace(/\s+/g, ' ').trim() || titleOf(src);
@@ -149,42 +176,54 @@ const Export = (() => {
       });
       L.push('');
     }
-    if (cycles.length) {
+    if (res.cycles.length) {
       L.push('---'); L.push('## ⚠ Не скомпилировано: цикл');
-      cycles.forEach(c => L.push('- цикл: ' + c.path.map(id => titleOf(byId[id])).join(' → ')));
+      res.cycles.forEach(c => L.push('- цикл: ' + c.path.map(id => titleOf(byId[id])).join(' → ')));
       L.push('');
-      Array.from(cycleNodes).sort().forEach(id => {
-        const node = byId[id]; if (!node) return;
-        L.push('**' + titleOf(node) + '** (порядок не определён)');
-        (node.parts || []).forEach(p => {
-          if (p.type === 'thought' && (p.text || '').trim()) { L.push(''); L.push(p.text.trim()); }
-        });
-        L.push('');
-      });
     }
     return L.join('\n');
   }
 
+  // --- реестр профилей: новый профиль = одна запись, меню строится само ---
+  const PROFILES = {
+    text:     { label: 'Чистый текст (txt)', ext: 'txt', enabled: true,  emit: emitText },
+    markdown: { label: 'Markdown (с медиа)',    ext: 'md',  enabled: false, emit: emitMarkdown }
+  };
+
+  function menuItems() {
+    return Object.keys(PROFILES).filter(k => PROFILES[k].enabled).map(k => ({
+      label: PROFILES[k].label,
+      action: () => exportProfile(k)
+    }));
+  }
+
+  function baseName(data) {
+    return (((data.meta && data.meta.name) || 'export').replace(/[\\/:*?"<>|]/g, '_'));
+  }
   function downloadText(name, text) {
-    const blob = new Blob([text], { type: 'text/markdown' });
+    const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  async function exportMarkdown() {
-    const res = compile();
+  async function exportProfile(key) {
+    const prof = PROFILES[key];
+    if (!prof) return;
     const data = Project.getData();
-    const name = (((data && data.meta.name) || 'export').replace(/[\\/:*?"<>|]/g, '_')) + '.md';
-    const saved = await Project.writeText(name, res.md);
-    if (!saved) downloadText(name, res.md);
-    let msg = 'Экспорт: шагов ' + res.stats.steps +
-              ', ансамблей ' + res.stats.ensembles +
-              ', аннотаций ' + res.stats.annotations + '.';
-    if (res.warn.cycles.length) msg += ' ⚠ циклов: ' + res.warn.cycles.length + ' (имена — в секции файла).';
+    if (!data) return;
+    const res = compile();
+    const text = prof.emit(res);
+    const name = baseName(data) + '.' + prof.ext;
+    const saved = await Project.writeText(name, text);
+    if (!saved) downloadText(name, text);
+    try { await navigator.clipboard.writeText(text); } catch (e) {}
+    let msg = 'Экспорт «' + prof.label + '»: шагов ' + res.stats.steps + '.';
+    if (res.warn.cycles.length) msg += ' ⚠ циклов: ' + res.warn.cycles.length + '.';
+    msg += ' Текст также в буфере обмена.';
     alert(msg);
-    Bus.emit('project:exported', { file: name });
+    Bus.emit('project:exported', { file: name, profile: key });
   }
 
-  return { compile, exportMarkdown };
+  return { compile, exportProfile, menuItems, PROFILES };
 })();

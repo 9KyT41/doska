@@ -43,7 +43,8 @@
         { label: 'Создать проект', action: function () { Project.createNew(); } },
         { label: 'Открыть проект…', action: function () { Project.open(); } },
         { label: 'Сохранить',       action: function () { Project.save(false); } },
-        { label: 'Сохранить как…',  action: function () { Project.saveAs(); } }
+        { label: 'Сохранить как…',  action: function () { Project.saveAs(); } },
+        { label: 'Переименовать проект…', action: function () { Project.rename(); } }
       ]},
       { label: 'Правка', children: [
         { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
@@ -51,9 +52,7 @@
         { label: 'Вернуть из корзины (Ctrl+Z)', action: function () { Compose.restoreLast(); } },
         { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
       ]},
-      { label: 'Экспорт', children: [
-        { label: 'Markdown (.md)', action: function () { Export.exportMarkdown(); } }
-      ]},  
+      { label: 'Экспорт', children: Export.menuItems() },
       { label: 'Настройки', children: [
         { label: 'Тема', children: THEMES.map(function (t) {
             return { label: t.name, action: function () { Themes.apply(t.id); } };
