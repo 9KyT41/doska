@@ -271,5 +271,22 @@ html, body { margin: 0; height: 100%; }
 .block-close:hover { background: rgba(0,0,0,.3); }
 
 
+/* О программе */
+.about-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 70;
+                 display: flex; align-items: center; justify-content: center; }
+.about-card { max-width: 440px; padding: 20px 24px; border-radius: 10px;
+              background: var(--mat-node-color, #223); color: var(--mat-ink, #eee);
+              box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.about-card h2 { margin: 0 0 12px; font-size: 18px; }
+.about-card a { color: var(--mat-socket-color, #6cf); }
+.about-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.5; }
+.about-donate { font-size: 13px; opacity: .9; }
+.about-qr { width: 140px; height: 140px; margin: 8px 0; padding: 6px;
+            background: #fff; image-rendering: pixelated; border-radius: 6px; }
+.about-close { margin-top: 12px; padding: 6px 14px; border: 0; border-radius: 4px;
+               background: var(--mat-socket-color, #6cf); color: #111;
+               cursor: pointer; font-weight: 600; }
+
+
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */

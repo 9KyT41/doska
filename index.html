@@ -32,6 +32,29 @@
   <script src="js/ui/menu.js"></script>
   <script>
    
+      function showAbout() {
+      const ov = document.createElement('div');
+      ov.className = 'about-overlay';
+      ov.innerHTML =
+        '<div class="about-card">' +
+        '<h2>ДОСКА — мыслелов</h2>' +
+        '<p>Ловит мысли у тех, у кого их миллиард и некуда девать. Для тех, у кого такой склад ума. (Мой склад, кажется, ограбили — поэтому я построил хранилище.)</p>' +
+        '<p>Умеет: поймать мысль голосом, клавой или вставкой; собрать в главы нитками и рамками; выгрузить текстом. Локально, без облака и регистраций.</p>' +
+        '<p>Версия v0.1-alpha. Роадмап — в спеке и в телеге. Баг-репорты и пожелания — в телеге, когда-нибудь, если это будет кому-то надо.</p>' +
+        '<p class="about-donate">Если надо — поддержите автора: идей, как развивать продукт, у автора вагон, а на локомотив, который этот вагон потащит, денег нет.<br>' +
+        '<a href="https://www.donationalerts.com/r/9kyt_413" target="_blank">donationalerts</a> · ' +
+        '<a href="https://t.me/boost/doska_smyslov" target="_blank">телега</a><br>' +
+        '<img class="about-qr" src="qr.png" alt="QR на поддержку"><br>' +
+        'Помочь можно не только деньгами: сообщить о баге, кинуть идею, рассказать другу.</p>' +
+        '<p>За поддержку всем огромное спасибо! Список поддержавших — в телеге и на сайте, если он когда-нибудь будет.</p>' +
+        '<p>Автор: 9KyT_41.</p>' +
+        '<button class="about-close">закрыть</button></div>';
+      ov.addEventListener('click', e => {
+        if (e.target === ov || e.target.classList.contains('about-close')) ov.remove();
+      });
+      document.body.appendChild(ov);
+    }
+
     function buildTree() {
       return [
         { label: 'Файл', children: [
@@ -48,10 +71,11 @@
           { label: 'Очистить корзину…',        action: function () { Compose.clearTrash(); } }
         ]},
         { label: 'Экспорт', children: Export.menuItems() },
-        { label: 'Настройки', children: [
+       { label: 'Настройки', children: [
           { label: 'Тема', children: THEMES.map(function (t) {
               return { label: t.name, action: function () { Themes.apply(t.id); } };
-            }) }
+            }) },
+          { label: 'О программе…', action: showAbout }
         ]}
       ];
     }

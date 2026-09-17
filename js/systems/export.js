@@ -117,6 +117,17 @@ const Export = (() => {
     // ТИР 2: свободные цепочки (вне блоков), упорядоченные нитками
     const freeSet = new Set(nodes.filter(n => !blockOf(n.id) && !annNodes.has(n.id) &&
                                               !inCycle.has(n.id) && touchedBySeq(n.id)).map(n => n.id));
+    // дотягиваем par-партнёров, чтобы ансамбли свободных цепочек не распадались
+    let grew = true;
+    while (grew) {
+      grew = false;
+      edges.forEach(e => {
+        if (e.type !== 'par') return;
+        const ok = id => byId[id] && !blockOf(id) && !annNodes.has(id) && !inCycle.has(id);
+        if (freeSet.has(e.from) && !freeSet.has(e.to) && ok(e.to)) { freeSet.add(e.to); grew = true; }
+        if (freeSet.has(e.to) && !freeSet.has(e.from) && ok(e.from)) { freeSet.add(e.from); grew = true; }
+      });
+    }
     const inFree = {}; freeSet.forEach(i => inFree[i] = true);
     const inDegFree = {}; freeSet.forEach(i => inDegFree[i] = 0);
     edges.forEach(e => {
@@ -153,7 +164,7 @@ const Export = (() => {
 
     // ТИР 4: всё остальное (мусором), в порядке создания
     const rest = nodes.filter(n => !blockOf(n.id) && !annNodes.has(n.id) && !inCycle.has(n.id) &&
-                                   !touchedBySeq(n.id)).map(n => n.id).sort();
+                                   !freeSet.has(n.id)).map(n => n.id).sort();
     if (rest.length) sections.push({ title: null, steps: orderedSteps(rest, edges) });
 
     const allSteps = sections.reduce((a, s) => a.concat(s.steps), []);
