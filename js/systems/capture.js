@@ -1,17 +1,19 @@
 // L3: capture-движок. Клава (N…Enter), paste, голос (зажал микрофон),
-// картинки (drop/paste). Куда целишься — туда и падает.
+// картинки (drop/paste). Новые ноды рождаются под курсором.
 const Capture = (() => {
   let pill = null;
   let state = 'idle';
   let cancelRequested = false;
   let pendingDiscard = false;
   let rec = null;
-  let bound = false;              // страховка от двойной регистрации слушателей
+  let bound = false;
+  let lastPointer = null;
+  let voiceSpawn = 'cursor';
   const pendingMedia = [];
 
   function freeSpot(data) {
-    const cx = window.innerWidth / 2 - 100;
-    const cy = window.innerHeight / 2 - 40;
+    const c = Compose.toWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const cx = c.x - 100, cy = c.y - 40;
     const n = (data.entities || []).length;
     const angle = n * 2.4;
     const r = 40 + 34 * Math.sqrt(n);
@@ -19,10 +21,28 @@ const Capture = (() => {
              y: Math.round(cy + r * Math.sin(angle)) };
   }
 
+  // спавн под курсором; если точка занята — каскадом по диагонали до свободной
+  function spawnPoint(data, cx, cy) {
+    const w = Compose.toWorld(cx, cy);
+    let x = Math.round(w.x - 110), y = Math.round(w.y - 40);
+    const occupied = (px, py) => (data.entities || []).some(n => {
+      const el = document.querySelector('.node[data-node-id="' + n.id + '"]');
+      const nw = el ? el.offsetWidth : 220, nh = el ? el.offsetHeight : 120;
+      return px < n.transform.x + nw && px + 220 > n.transform.x &&
+             py < n.transform.y + nh && py + 120 > n.transform.y;
+    });
+    let guard = 0;
+    while (occupied(x, y) && guard < 40) { x += 28; y += 28; guard++; }
+    return { x: x, y: y };
+  }
+  function hereOrCenter(data) {
+    return lastPointer ? spawnPoint(data, lastPointer.x, lastPointer.y) : freeSpot(data);
+  }
+
   function newThoughtNode(text, source) {
     const data = Project.getData();
     if (!data) return null;
-    const pos = freeSpot(data);
+    const pos = hereOrCenter(data);
     const node = Entity.createNode(pos.x, pos.y);
     Entity.addPart(node, 'thought', { text: text, source: source });
     data.entities.push(node);
@@ -53,22 +73,22 @@ const Capture = (() => {
       url: url, file: null, caption: null });
     Bus.emit('entity:changed', node);
     Project.markDirty();
-    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const ext = (file.name.split('.pop').pop() || 'png').toLowerCase();
     pendingMedia.push({ part: image, blob: file, name: 'i_' + image.id + '.' + ext });
     flushMedia();
   }
 
-  async function imagesFromFiles(files, targetNode) {
+  async function imagesFromFiles(files, targetNode, cx, cy) {
     const data = Project.getData();
     if (!data) return;
     const imgs = Array.from(files).filter(f => f.type && f.type.startsWith('image/'));
     if (!imgs.length) return;
-    if (targetNode) {                       // целился в ноду — части ложатся в неё
+    if (targetNode) {
       for (const f of imgs) await addImagePart(targetNode, f);
       return;
     }
-    for (const f of imgs) {                 // иначе — по ноде на картинку, без дублей
-      const pos = freeSpot(data);
+    for (const f of imgs) {
+      const pos = (cx != null) ? spawnPoint(data, cx, cy) : hereOrCenter(data);
       const node = Entity.createNode(pos.x, pos.y);
       data.entities.push(node);
       Bus.emit('entity:created', node);
@@ -80,7 +100,7 @@ const Capture = (() => {
     const sel = Compose.selected();
     if (sel.size !== 1) return null;
     const data = Project.getData();
-    return data && data.entities.find(n => n.id === Array.from(sel)[0]) || null;
+    return (data && data.entities.find(n => n.id === Array.from(sel)[0])) || null;
   }
 
   // --- пилюля и её состояния ---
@@ -101,14 +121,15 @@ const Capture = (() => {
   function buildMic() {
     const p = document.createElement('button');
     p.className = 'mic-pill';
-    p.addEventListener('mousedown', e => { e.preventDefault(); onHoldStart(); });
+    p.addEventListener('mousedown', e => { e.preventDefault(); onHoldStart('pill'); });
     p.addEventListener('mouseup', onHoldEnd);
     p.addEventListener('mouseleave', onHoldEnd);
     document.body.appendChild(p);
     return p;
   }
 
-  function onHoldStart() {
+   function onHoldStart(src) {
+    voiceSpawn = (src === 'pill') ? 'center' : 'cursor';
     if (state !== 'idle') return;
     state = 'starting';
     cancelRequested = false;
@@ -143,7 +164,9 @@ const Capture = (() => {
       return;
     }
     try {
-      const pos = freeSpot(data);
+      const pos = (voiceSpawn === 'center')
+      ? spawnPoint(data, window.innerWidth / 2, window.innerHeight / 2)
+      : hereOrCenter(data);
       const node = Entity.createNode(pos.x, pos.y);
       const thought = Entity.addPart(node, 'thought', { text: '', source: 'voice' });
       data.entities.push(node);
@@ -212,8 +235,6 @@ const Capture = (() => {
       if (i >= 0) data.entities.splice(i, 1);
       Render.renderAll(data);
       Project.markDirty();
-      const h = document.querySelector('.board-hint');
-      if (h) h.textContent = 'В file-режиме Chrome спрашивает микрофон при каждой загрузке. Постоянное разрешение — через start-server.bat (localhost).';
       return;
     }
     const audio = Entity.addPart(node, 'audio', {
@@ -242,12 +263,16 @@ const Capture = (() => {
     setPill('idle');
     Bus.on('project:save', () => { flushMedia(); });
 
-    if (bound) return;    // слушатели регистрируются ровно один раз за сессию
+    if (bound) return;
     bound = true;
+
+    document.addEventListener('mousemove', e => {
+      lastPointer = { x: e.clientX, y: e.clientY };
+    });
 
     document.addEventListener('keydown', e => {
       if (isEditing()) {
-         if (e.key === 'Escape') {
+        if (e.key === 'Escape') {
           e.preventDefault();
           e.target.blur();
           return;
@@ -267,7 +292,7 @@ const Capture = (() => {
       }
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
-        onHoldStart();
+        onHoldStart('key');
         return;
       }
       if (e.key === 'n' || e.key === 'N' || e.key === 'т' || e.key === 'Т') {
@@ -281,7 +306,6 @@ const Capture = (() => {
       if (e.code === 'Space') onHoldEnd();
     });
 
-    // --- paste: картинки и текст, с уважением к выделению ---
     document.addEventListener('paste', e => {
       if (isEditing()) return;
       const items = e.clipboardData && e.clipboardData.items;
@@ -307,7 +331,6 @@ const Capture = (() => {
       else newThoughtNode(text.trim(), 'paste');
     });
 
-    // --- drop: куда целишься, туда и падает ---
     document.addEventListener('dragover', e => { e.preventDefault(); });
     document.addEventListener('drop', e => {
       e.preventDefault();
@@ -317,9 +340,9 @@ const Capture = (() => {
       let target = null;
       if (nodeEl) {
         const data = Project.getData();
-        target = data && data.entities.find(n => n.id === nodeEl.dataset.nodeId) || null;
+        target = (data && data.entities.find(n => n.id === nodeEl.dataset.nodeId)) || null;
       }
-      imagesFromFiles(files, target);
+      imagesFromFiles(files, target, e.clientX, e.clientY);
     });
   }
 
