@@ -142,6 +142,7 @@ const Graph = (() => {
     document.addEventListener('mousemove', moveLink);
     document.addEventListener('mouseup', endLink);
     svg.addEventListener('dblclick', e => {
+      e.stopPropagation();   // событие не доходит до compose — вид не сбрасывается
       const hit = e.target.closest('.edge-hit');
       if (hit && hit.dataset.edgeId) removeEdge(hit.dataset.edgeId);
     });

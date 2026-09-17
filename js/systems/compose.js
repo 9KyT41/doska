@@ -232,7 +232,8 @@ const Compose = (() => {
 
     boardEl.addEventListener('dblclick', e => {
       if (e.target.closest('.node') || e.target.closest('.block') ||
-          e.target.closest('.palette') || e.target.closest('.mic-pill')) return;
+          e.target.closest('.palette') || e.target.closest('.mic-pill') ||
+          e.target.closest('.edges-svg')) return;
       scale = 1; ox = 0; oy = 0; applyView();
     });
 
