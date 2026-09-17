@@ -1,4 +1,5 @@
-// L3: export. Один детерминированный обход графа + сменные профили излучения (D15).
+// L3: export. Обход графа в секции + профили излучения (D15).
+// Приоритет секций: блоки с нитками → свободные цепочки → блоки без ниток → остальное.
 const Export = (() => {
 
   function titleOf(node) {
@@ -16,19 +17,6 @@ const Export = (() => {
     const t = (node.parts || []).find(p => p.type === 'thought');
     return t ? (t.text || '') : '';
   }
-  function seqOut(node, edges) {
-    return edges.filter(e => e.type === 'seq' && e.from === node.id)
-                .sort((a, b) => (a.order || 0) - (b.order || 0));
-  }
-  function parPartners(id, edges) {
-    const out = [];
-    edges.forEach(e => {
-      if (e.type !== 'par') return;
-      if (e.from === id) out.push(e.to);
-      else if (e.to === id) out.push(e.from);
-    });
-    return out;
-  }
   function isAnnotationOnly(node, edges) {
     const seq = edges.some(e => e.type === 'seq' && (e.from === node.id || e.to === node.id));
     const par = edges.some(e => e.type === 'par' && (e.from === node.id || e.to === node.id));
@@ -45,8 +33,7 @@ const Export = (() => {
       (adj[id] || []).forEach(nx => {
         if (color[nx] === 'gray') {
           const path = stack.slice(stack.indexOf(nx)).concat([nx]);
-          cycles.push({ path });
-          path.forEach(p => inCycle.add(p));
+          cycles.push({ path }); path.forEach(p => inCycle.add(p));
         } else if (!color[nx]) dfs(nx);
       });
       stack.pop(); color[id] = 'black';
@@ -55,73 +42,144 @@ const Export = (() => {
     return { cycles, inCycle };
   }
 
-  // --- общий обход (не зависит от профиля) ---
+  // par-кластеры (ансамбли) среди заданных id
+  function parClusters(ids, edges) {
+    const set = new Set(ids);
+    const parent = {}; ids.forEach(i => parent[i] = i);
+    function find(x) { while (parent[x] !== x) x = parent[x] = parent[parent[x]]; return x; }
+    edges.forEach(e => {
+      if (e.type !== 'par' || !set.has(e.from) || !set.has(e.to)) return;
+      const a = find(e.from), b = find(e.to);
+      if (a !== b) parent[a] = b;
+    });
+    const map = {};
+    ids.forEach(i => { const r = find(i); (map[r] = map[r] || []).push(i); });
+    return Object.values(map);
+  }
+  // упорядоченный список id -> шаги (par схлопнут), порядок кластеров по первой встрече
+  function orderedSteps(orderedIds, edges) {
+    const clusters = parClusters(orderedIds, edges);
+    const pos = {}; orderedIds.forEach((id, i) => pos[id] = i);
+    clusters.forEach(c => c.sort((a, b) => pos[a] - pos[b]));
+    clusters.sort((a, b) => pos[a[0]] - pos[b[0]]);
+    return clusters;
+  }
+  // порядок внутри набора по внутренним seq-ниткам (DFS от корней)
+  function internalOrder(ids, edges) {
+    const set = new Set(ids);
+    const adj = {}; ids.forEach(i => adj[i] = []);
+    const inDeg = {}; ids.forEach(i => inDeg[i] = 0);
+    edges.forEach(e => {
+      if (e.type !== 'seq' || !set.has(e.from) || !set.has(e.to)) return;
+      adj[e.from].push({ to: e.to, order: e.order || 0 });
+      inDeg[e.to]++;
+    });
+    ids.forEach(i => adj[i].sort((a, b) => a.order - b.order));
+    const seen = new Set(), order = [];
+    function dfs(id) {
+      if (seen.has(id)) return;
+      seen.add(id); order.push(id);
+      adj[id].forEach(o => dfs(o.to));
+    }
+    ids.filter(i => inDeg[i] === 0).sort().forEach(dfs);
+    ids.slice().sort().forEach(i => { if (!seen.has(i)) { seen.add(i); order.push(i); } });
+    return order;
+  }
+
   function compile() {
     const data = Project.getData();
-    const empty = { steps: [], annEdges: [], cycles: [], cycleNodes: new Set(),
-                    byId: {}, stats: { steps: 0, ensembles: 0, annotations: 0, cycles: 0, fragments: 0 },
-                    warn: { cycles: [] } };
+    const empty = { sections: [], annEdges: [], cycles: [], cycleNodes: new Set(), byId: {},
+                    stats: { sections: 0, ensembles: 0, annotations: 0, cycles: 0 }, warn: { cycles: [] } };
     if (!data) return empty;
     const nodes = data.entities || [], edges = data.edges || [];
     const byId = {}; nodes.forEach(n => byId[n.id] = n);
+    const blocks = data.blocks || [];
     const annEdges = edges.filter(e => e.type === 'add');
     const annNodes = new Set(nodes.filter(n => isAnnotationOnly(n, edges)).map(n => n.id));
     const { cycles, inCycle } = findCycles(nodes, edges);
+    const blockOf = id => { const n = byId[id]; return (n && n.group) ? n.group.blockId : null; };
+    const membersOf = bid => nodes.filter(n => n.group && n.group.blockId === bid &&
+                                                !annNodes.has(n.id) && !inCycle.has(n.id)).map(n => n.id);
+    const hasSeqInside = bid => {
+      const set = new Set(membersOf(bid));
+      return edges.some(e => e.type === 'seq' && set.has(e.from) && set.has(e.to));
+    };
+    const touchedBySeq = id => edges.some(e => e.type === 'seq' && (e.from === id || e.to === id));
 
-    const visited = new Set(), steps = [];
-    function ensembleOf(id) {
-      const group = [id], seen = new Set([id]), stack = [id];
-      while (stack.length) {
-        const cur = stack.pop();
-        parPartners(cur, edges).forEach(pid => {
-          if (!seen.has(pid) && byId[pid] && !visited.has(pid) && !inCycle.has(pid)) {
-            seen.add(pid); group.push(pid); stack.push(pid);
-          }
-        });
+    const sections = [];
+
+    // ТИР 1: блоки с внутренней последовательностью = главы по ниткам
+    blocks.filter(b => hasSeqInside(b.id)).sort((a, b) => a.id.localeCompare(b.id)).forEach(b => {
+      const ordered = internalOrder(membersOf(b.id), edges);
+      sections.push({ title: b.title || null, steps: orderedSteps(ordered, edges) });
+    });
+
+    // ТИР 2: свободные цепочки (вне блоков), упорядоченные нитками
+    const freeSet = new Set(nodes.filter(n => !blockOf(n.id) && !annNodes.has(n.id) &&
+                                              !inCycle.has(n.id) && touchedBySeq(n.id)).map(n => n.id));
+    const inFree = {}; freeSet.forEach(i => inFree[i] = true);
+    const inDegFree = {}; freeSet.forEach(i => inDegFree[i] = 0);
+    edges.forEach(e => {
+      if (e.type === 'seq' && inFree[e.from] && inFree[e.to]) inDegFree[e.to]++;
+    });
+    const seenFree = new Set();
+    function chainFrom(id) {
+      const chain = [];
+      (function dfs(x) {
+        if (seenFree.has(x)) return;
+        seenFree.add(x); chain.push(x);
+        edges.filter(e => e.type === 'seq' && e.from === x && inFree[e.to])
+             .sort((a, b) => (a.order || 0) - (b.order || 0))
+             .forEach(e => dfs(e.to));
+      })(id);
+      return chain;
+    }
+    Array.from(freeSet).filter(i => inDegFree[i] === 0).sort().forEach(h => {
+      const c = chainFrom(h);
+      if (c.length) sections.push({ title: null, steps: orderedSteps(c, edges) });
+    });
+    Array.from(freeSet).sort().forEach(i => {
+      if (!seenFree.has(i)) {
+        const c = chainFrom(i);
+        if (c.length) sections.push({ title: null, steps: orderedSteps(c, edges) });
       }
-      group.sort();
-      group.sort((a, b) => (a === id ? -1 : b === id ? 1 : 0));
-      return group;
-    }
-    function visit(id) {
-      if (visited.has(id) || inCycle.has(id) || !byId[id]) return;
-      const group = ensembleOf(id);
-      group.forEach(g => visited.add(g));
-      steps.push(group);
-      group.forEach(g => seqOut(byId[g], edges).forEach(e => {
-        if (!inCycle.has(e.to)) visit(e.to);
-      }));
-    }
-    const incomingSeq = new Set(edges.filter(e => e.type === 'seq').map(e => e.to));
-    const roots = nodes.filter(n => !incomingSeq.has(n.id) && !annNodes.has(n.id) && !inCycle.has(n.id))
-                       .map(n => n.id).sort();
-    roots.forEach(visit);
-    const frags = nodes.filter(n => !visited.has(n.id) && !annNodes.has(n.id) && !inCycle.has(n.id))
-                       .map(n => n.id).sort();
-    frags.forEach(visit);
+    });
 
+    // ТИР 3: блоки без внутренней последовательности = главы в порядке создания
+    blocks.filter(b => !hasSeqInside(b.id)).sort((a, b) => a.id.localeCompare(b.id)).forEach(b => {
+      const members = membersOf(b.id).slice().sort();
+      if (members.length) sections.push({ title: b.title || null, steps: orderedSteps(members, edges) });
+    });
+
+    // ТИР 4: всё остальное (мусором), в порядке создания
+    const rest = nodes.filter(n => !blockOf(n.id) && !annNodes.has(n.id) && !inCycle.has(n.id) &&
+                                   !touchedBySeq(n.id)).map(n => n.id).sort();
+    if (rest.length) sections.push({ title: null, steps: orderedSteps(rest, edges) });
+
+    const allSteps = sections.reduce((a, s) => a.concat(s.steps), []);
     return {
-      steps, annEdges, cycles, cycleNodes: inCycle, byId,
-      stats: { steps: steps.length, ensembles: steps.filter(g => g.length > 1).length,
-               annotations: annEdges.length, cycles: cycles.length,
-               fragments: roots.length + frags.length },
+      sections, annEdges, cycles, cycleNodes: inCycle, byId,
+      stats: { sections: sections.length,
+               ensembles: allSteps.filter(g => g.length > 1).length,
+               annotations: annEdges.length, cycles: cycles.length },
       warn: { cycles }
     };
   }
 
-  // --- профиль: чистый текст (в Word) ---
+  // --- профиль: чистый текст ---
   function emitText(res) {
     const L = [];
-    res.steps.forEach(group => {
-      group.forEach(id => {
-        const nd = res.byId[id];
-        (nd.parts || []).forEach(p => {
-          if (p.type === 'thought' && (p.text || '').trim()) L.push(p.text.trim());
-          // audio: его расшифровка уже есть частью-мыслью выше -> ничего не дублируем
-          // image: в текстовом профиле игнорируется
+    res.sections.forEach(sec => {
+      if (sec.title) { L.push(sec.title); L.push(''); }
+      sec.steps.forEach(step => {
+        step.forEach(id => {
+          const nd = res.byId[id];
+          (nd.parts || []).forEach(p => {
+            if (p.type === 'thought' && (p.text || '').trim()) L.push(p.text.trim());
+          });
         });
+        L.push('');
       });
-      L.push('');
     });
     res.annEdges.forEach(e => {
       const src = res.byId[e.from];
@@ -132,7 +190,7 @@ const Export = (() => {
     return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  // --- профиль: markdown с медиа (выключен, вернётся позже) ---
+  // --- профиль: markdown с медиа ---
   function emitNodeBody(nd, L, inEnsemble) {
     if (inEnsemble && nd.title && nd.title.trim()) L.push('**' + nd.title.trim() + '**');
     (nd.parts || []).forEach(p => {
@@ -149,22 +207,19 @@ const Export = (() => {
     const data = Project.getData();
     L.push('# ' + ((data.meta && data.meta.name) || 'Без имени'));
     L.push('');
-    let n = 0;
-    res.steps.forEach(group => {
-      if (group.length > 1) {
-        n++;
-        const titled = group.map(id => byId[id]).filter(nd => nd.title && nd.title.trim());
-        L.push('## ' + n + '. Ансамбль (вместе)' +
-               (titled.length ? ': ' + titled.map(t => t.title.trim()).join(' + ') : ''));
-        L.push('');
-        group.forEach(id => emitNodeBody(byId[id], L, true));
-      } else {
-        const nd = byId[group[0]];
-        if (nd.title && nd.title.trim()) {
-          n++; L.push('## ' + n + '. ' + nd.title.trim()); L.push('');
+    res.sections.forEach(sec => {
+      if (sec.title) { L.push('## ' + sec.title); L.push(''); }
+      sec.steps.forEach(step => {
+        if (step.length > 1) {
+          L.push('### Ансамбль (вместе): ' + step.map(id => titleOf(byId[id])).join(' + '));
+          L.push('');
+          step.forEach(id => emitNodeBody(byId[id], L, true));
+        } else {
+          const nd = byId[step[0]];
+          if (nd.title && nd.title.trim()) { L.push('### ' + nd.title.trim()); L.push(''); }
           emitNodeBody(nd, L, false);
-        } else emitNodeBody(nd, L, false);
-      }
+        }
+      });
     });
     if (res.annEdges.length) {
       L.push('---'); L.push('## Аннотации');
@@ -184,19 +239,14 @@ const Export = (() => {
     return L.join('\n');
   }
 
-  // --- реестр профилей: новый профиль = одна запись, меню строится само ---
   const PROFILES = {
-    text:     { label: 'Чистый текст (txt)', ext: 'txt', enabled: true,  emit: emitText },
-    markdown: { label: 'Markdown (с медиа)',    ext: 'md',  enabled: false, emit: emitMarkdown }
+    text:     { label: 'Чистый текст (.txt)', ext: 'txt', enabled: true,  emit: emitText },
+    markdown: { label: 'Markdown (с медиа)',  ext: 'md',  enabled: false, emit: emitMarkdown }
   };
-
   function menuItems() {
     return Object.keys(PROFILES).filter(k => PROFILES[k].enabled).map(k => ({
-      label: PROFILES[k].label,
-      action: () => exportProfile(k)
-    }));
+      label: PROFILES[k].label, action: () => exportProfile(k) }));
   }
-
   function baseName(data) {
     return (((data.meta && data.meta.name) || 'export').replace(/[\\/:*?"<>|]/g, '_'));
   }
@@ -206,7 +256,6 @@ const Export = (() => {
     a.href = URL.createObjectURL(blob); a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-
   async function exportProfile(key) {
     const prof = PROFILES[key];
     if (!prof) return;
@@ -218,7 +267,8 @@ const Export = (() => {
     const saved = await Project.writeText(name, text);
     if (!saved) downloadText(name, text);
     try { await navigator.clipboard.writeText(text); } catch (e) {}
-    let msg = 'Экспорт «' + prof.label + '»: шагов ' + res.stats.steps + '.';
+    let msg = 'Экспорт «' + prof.label + '»: секций ' + res.stats.sections +
+              ', ансамблей ' + res.stats.ensembles + ', аннотаций ' + res.stats.annotations + '.';
     if (res.warn.cycles.length) msg += ' ⚠ циклов: ' + res.warn.cycles.length + '.';
     msg += ' Текст также в буфере обмена.';
     alert(msg);
