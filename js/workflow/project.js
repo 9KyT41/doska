@@ -256,7 +256,8 @@ const Project = (() => {
 
   function init() {
     document.addEventListener('keydown', e => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'ы')) {
         e.preventDefault();
         save(false);
       }

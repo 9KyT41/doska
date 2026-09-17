@@ -247,6 +247,11 @@ const Capture = (() => {
 
     document.addEventListener('keydown', e => {
       if (isEditing()) {
+         if (e.key === 'Escape') {
+          e.preventDefault();
+          e.target.blur();
+          return;
+        }
         if (e.key === 'Enter' && !e.shiftKey) {
           if (e.target.classList.contains('node-title')) {
             e.preventDefault();
