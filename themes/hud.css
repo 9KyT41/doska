@@ -1,0 +1,38 @@
+/* HUD: тёмный графит + циановый неон, по мотивам референса автора */
+:root {
+  --font-main: system-ui, sans-serif;
+  --ink-main: #d7eef6;
+  --ink-muted: #7fa3b0;
+
+  /* Материал доски: графит с едва заметной неоновой сеткой */
+  --mat-board-color: #06090d;
+  --mat-board-texture:
+    repeating-linear-gradient(90deg, rgba(63,217,246,.045) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(0deg,  rgba(63,217,246,.045) 0 1px, transparent 1px 64px);
+
+  /* Материал ноды: тёмная панель с холодным подтоном и неоновой кромкой */
+  --mat-node-color: #0d141b;
+  --mat-node-texture: linear-gradient(180deg, rgba(63,217,246,.06), rgba(0,0,0,0) 42%);
+  --mat-node-border: 1px solid #1e2a33;
+  --mat-node-shadow: 0 2px 10px rgba(0,0,0,.6), 0 0 0 1px rgba(63,217,246,.07);
+
+  /* Кнопки и гнёзда */
+  --mat-button-color: #121a22;
+  --mat-button-border: 1px solid #24333f;
+  --mat-socket-color: #3fd9f6;
+  --line-edge: #3fd9f6;
+}
+
+/* Неоновые акценты поверх переменных (тема грузится после core.css и выигрывает) */
+.node.sel {
+  outline: 1px solid #3fd9f6;
+  box-shadow: 0 0 14px rgba(63,217,246,.28);
+}
+.socket { box-shadow: 0 0 6px rgba(63,217,246,.45); }
+.mic-pill {
+  background: #0b1117; color: #d7eef6; border: 1px solid #24333f;
+}
+.mic-pill.rec {
+  background: #3a0d12; border-color: #ff5566; color: #ffd7db;
+}
+.about-card { border: 1px solid #24333f; }
