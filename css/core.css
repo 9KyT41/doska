@@ -287,6 +287,41 @@ html, body { margin: 0; height: 100%; }
                background: var(--mat-socket-color, #6cf); color: #111;
                cursor: pointer; font-weight: 600; }
 
+/* Поиск нод (сворачиваемый) */
+.search-box {
+  position: fixed; top: 12px; right: 64px; z-index: 40;
+}
+.search-toggle {
+  width: 40px; height: 40px; border: 1px solid var(--mat-node-border, #456);
+  background: var(--mat-node-color, #223); color: var(--ink-main, #eee);
+  border-radius: 6px; font-size: 18px; cursor: pointer;
+  box-shadow: var(--mat-node-shadow);
+}
+.search-toggle:hover { background: var(--mat-button-color, #334); }
+.search-panel {
+  background: var(--mat-node-color, #223); border: 1px solid var(--mat-node-border, #456);
+  border-radius: 6px; padding: 8px; box-shadow: var(--mat-node-shadow);
+}
+.search-input {
+  width: 220px; padding: 6px 10px; border: 1px solid var(--mat-button-border, #456);
+  background: var(--mat-button-color, #123); color: var(--ink-main, #eee);
+  border-radius: 4px; font-size: 14px; outline: none;
+}
+.search-input:focus { border-color: var(--mat-socket-color, #6cf); }
+.search-results {
+  margin-top: 6px; max-height: 300px; overflow-y: auto;
+  background: var(--mat-button-color, #123); border: 1px solid var(--mat-button-border, #456);
+  border-radius: 4px;
+}
+.search-result {
+  padding: 8px 10px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 13px; line-height: 1.4;
+}
+.search-result:last-child { border-bottom: 0; }
+.search-result:hover { background: rgba(255,255,255,.08); }
+.search-result-title { font-weight: 600; margin-bottom: 2px; }
+.search-result-text { color: var(--ink-muted, #aaa); font-size: 12px; }
+.search-result.empty { text-align: center; color: var(--ink-muted, #aaa); cursor: default; }
 
 
 /* Будущие .node, .btn, .socket берут материалы из тех же слотов */

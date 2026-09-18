@@ -1,4 +1,4 @@
-// L3: compose-движок. Выделение, удаление через корзину, возврат, драг, пан/зум.
+// L3: compose-движок. Выделение, удаление через корзину, возврат, драг, пан/зум, поиск.
 const Compose = (() => {
   const sel = new Set();
   let scale = 1, ox = 0, oy = 0;
@@ -22,12 +22,10 @@ const Compose = (() => {
     const el = elOf(id);
     if (el) el.classList.toggle('sel', on);
   }
-
   function setSelection(ids) {
     clearSel();
     (ids || []).forEach(id => setSel(id, true));
   }
-
   function clearSel() {
     Array.from(sel).forEach(id => setSel(id, false));
     sel.clear();
@@ -35,6 +33,15 @@ const Compose = (() => {
   function isEditing() {
     const a = document.activeElement;
     return a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+  }
+
+  // --- центрирование на ноде (для поиска) ---
+  function centerOn(node) {
+    const el = elOf(node.id);
+    const w = el ? el.offsetWidth : 200, h = el ? el.offsetHeight : 100;
+    ox = innerWidth / 2 - (node.transform.x + w / 2) * scale;
+    oy = innerHeight / 2 - (node.transform.y + h / 2) * scale;
+    applyView();
   }
 
   // --- удаление = выселение в корзину (живёт в проекте, переживает сейв) ---
@@ -45,7 +52,6 @@ const Compose = (() => {
     const removed = (data.entities || []).filter(n => set.has(n.id));
     if (!removed.length) return;
     data.entities = data.entities.filter(n => !set.has(n.id));
-    // TODO шаг 3: рёбра удалённых нод тоже укладывать в корзину
     data.edges = (data.edges || []).filter(e => !set.has(e.from) && !set.has(e.to));
     if (!data.trash) data.trash = [];
     const now = Date.now();
@@ -154,8 +160,104 @@ const Compose = (() => {
     applyView();
   }
 
-  function init() {
-    boardEl = document.getElementById('board');
+  // --- поиск нод ---
+  function initSearch() {
+    const box = document.createElement('div');
+    box.className = 'search-box';
+    box.innerHTML = 
+      '<button class="search-toggle" title="Поиск (Ctrl+F)">🔍</button>' +
+      '<div class="search-panel" style="display:none;">' +
+        '<input class="search-input" type="text" placeholder="Поиск нод…" autocomplete="off">' +
+        '<div class="search-results" style="display:none;"></div>' +
+      '</div>';
+    document.body.appendChild(box);
+
+    const toggle = box.querySelector('.search-toggle');
+    const panel = box.querySelector('.search-panel');
+    const input = box.querySelector('.search-input');
+    const results = box.querySelector('.search-results');
+    let timer = null;
+
+    toggle.addEventListener('click', () => {
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+      toggle.style.display = isOpen ? 'block' : 'none';
+      if (!isOpen) { input.focus(); input.select(); }
+    });
+
+    function closeSearch() {
+      panel.style.display = 'none';
+      toggle.style.display = 'block';
+      input.value = '';
+      results.style.display = 'none';
+    }
+
+    function doSearch(query) {
+      results.innerHTML = '';
+      if (!query || query.length < 2) {
+        results.style.display = 'none';
+        return;
+      }
+      const q = query.toLowerCase();
+      const data = Project.getData();
+      if (!data) return;
+      const matches = (data.entities || []).filter(n => {
+        if (n.title && n.title.toLowerCase().includes(q)) return true;
+        return (n.parts || []).some(p => p.type === 'thought' && (p.text || '').toLowerCase().includes(q));
+      }).slice(0, 10);
+
+      if (!matches.length) {
+        results.innerHTML = '<div class="search-result empty">Ничего не найдено</div>';
+        results.style.display = 'block';
+        return;
+      }
+
+      matches.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'search-result';
+        const title = n.title || '(без названия)';
+        const thought = (n.parts || []).find(p => p.type === 'thought');
+        const text = thought ? (thought.text || '') : '';
+        const preview = text.length > 60 ? text.slice(0, 60) + '…' : text;
+        el.innerHTML = '<div class="search-result-title"></div>' +
+                       (preview ? '<div class="search-result-text"></div>' : '');
+        el.querySelector('.search-result-title').textContent = title;
+        if (preview) el.querySelector('.search-result-text').textContent = preview;
+        el.addEventListener('click', () => {
+          closeSearch();
+          setSelection([n.id]);
+          centerOn(n);
+        });
+        results.appendChild(el);
+      });
+      results.style.display = 'block';
+    }
+
+    input.addEventListener('input', e => {
+      clearTimeout(timer);
+      timer = setTimeout(() => doSearch(e.target.value), 200);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSearch();
+      }
+    });
+
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А')) {
+        e.preventDefault();
+        panel.style.display = 'block';
+        toggle.style.display = 'none';
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  function init(board) {
+    boardEl = board || document.getElementById('board');
     worldEl = Render.getWorld();
 
     boardEl.addEventListener('mousedown', e => {
@@ -233,7 +335,7 @@ const Compose = (() => {
     boardEl.addEventListener('dblclick', e => {
       if (e.target.closest('.node') || e.target.closest('.block') ||
           e.target.closest('.palette') || e.target.closest('.mic-pill') ||
-          e.target.closest('.edges-svg')) return;
+          e.target.closest('.edges-svg') || e.target.closest('.search-box')) return;
       scale = 1; ox = 0; oy = 0; applyView();
     });
 
@@ -254,8 +356,11 @@ const Compose = (() => {
       if ((e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А') &&
           !e.ctrlKey && !e.metaKey) fitAll();
     });
+
+    initSearch();
   }
 
-    return { init, deleteSelected, deleteEmpty, deleteNodes, setSelection,
-           restoreLast, clearTrash, fitAll, selected: () => sel, toWorld };
+  return { init, deleteSelected, deleteEmpty, deleteNodes, setSelection,
+           restoreLast, clearTrash, fitAll, centerOn,
+           selected: () => sel, toWorld: toWorld };
 })();
