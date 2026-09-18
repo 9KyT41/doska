@@ -1,4 +1,5 @@
-// L3: compose-движок. Выделение, удаление через корзину, возврат, драг, пан/зум, поиск.
+// L3: compose-движок. Выделение, удаление через корзину, возврат, драг, пан/зум,
+// навигатор (список нод с фильтром и прыжком по dblclick).
 const Compose = (() => {
   const sel = new Set();
   let scale = 1, ox = 0, oy = 0;
@@ -35,7 +36,7 @@ const Compose = (() => {
     return a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
   }
 
-  // --- центрирование на ноде (для поиска) ---
+  // --- центрирование на ноде ---
   function centerOn(node) {
     const el = elOf(node.id);
     const w = el ? el.offsetWidth : 200, h = el ? el.offsetHeight : 100;
@@ -44,7 +45,7 @@ const Compose = (() => {
     applyView();
   }
 
-  // --- удаление = выселение в корзину (живёт в проекте, переживает сейв) ---
+  // --- удаление = выселение в корзину ---
   function deleteNodes(ids) {
     const data = Project.getData();
     if (!data || !ids.length) return;
@@ -160,100 +161,106 @@ const Compose = (() => {
     applyView();
   }
 
-  // --- поиск нод ---
-  function initSearch() {
+  // --- навигатор: список нод + фильтр (правый нижний угол) ---
+  function initNavigator() {
     const box = document.createElement('div');
-    box.className = 'search-box';
-    box.innerHTML = 
-      '<button class="search-toggle" title="Поиск (Ctrl+F)">🔍</button>' +
-      '<div class="search-panel" style="display:none;">' +
-        '<input class="search-input" type="text" placeholder="Поиск нод…" autocomplete="off">' +
-        '<div class="search-results" style="display:none;"></div>' +
-      '</div>';
+    box.className = 'nav-box';
+    box.innerHTML =
+      '<div class="nav-panel" style="display:none;">' +
+        '<input class="nav-filter" type="text" placeholder="Фильтр по тексту…" autocomplete="off">' +
+        '<div class="nav-list"></div>' +
+      '</div>' +
+      '<button class="nav-toggle" title="Список нод (Ctrl+F)">📋<span class="nav-count"></span></button>';
     document.body.appendChild(box);
 
-    const toggle = box.querySelector('.search-toggle');
-    const panel = box.querySelector('.search-panel');
-    const input = box.querySelector('.search-input');
-    const results = box.querySelector('.search-results');
-    let timer = null;
+    const panel = box.querySelector('.nav-panel');
+    const filter = box.querySelector('.nav-filter');
+    const list = box.querySelector('.nav-list');
+    const toggle = box.querySelector('.nav-toggle');
+    const count = box.querySelector('.nav-count');
+    let timer = 0;
 
-    toggle.addEventListener('click', () => {
-      const isOpen = panel.style.display !== 'none';
-      panel.style.display = isOpen ? 'none' : 'block';
-      toggle.style.display = isOpen ? 'block' : 'none';
-      if (!isOpen) { input.focus(); input.select(); }
-    });
-
-    function closeSearch() {
+    function openPanel() {
+      panel.style.display = 'flex';
+      filter.focus();
+      filter.select();
+    }
+    function closePanel() {
       panel.style.display = 'none';
-      toggle.style.display = 'block';
-      input.value = '';
-      results.style.display = 'none';
+      filter.value = '';
+      rebuild();
     }
 
-    function doSearch(query) {
-      results.innerHTML = '';
-      if (!query || query.length < 2) {
-        results.style.display = 'none';
-        return;
-      }
-      const q = query.toLowerCase();
+    function rebuild() {
       const data = Project.getData();
-      if (!data) return;
-      const matches = (data.entities || []).filter(n => {
-        if (n.title && n.title.toLowerCase().includes(q)) return true;
-        return (n.parts || []).some(p => p.type === 'thought' && (p.text || '').toLowerCase().includes(q));
-      }).slice(0, 10);
-
-      if (!matches.length) {
-        results.innerHTML = '<div class="search-result empty">Ничего не найдено</div>';
-        results.style.display = 'block';
+      const q = (filter.value || '').toLowerCase();
+      list.innerHTML = '';
+      const nodes = ((data && data.entities) || []).slice()
+        .sort((a, b) => a.id.localeCompare(b.id));
+      count.textContent = nodes.length ? String(nodes.length) : '';
+      const shown = nodes.filter(n => {
+        if (!q) return true;
+        if ((n.title || '').toLowerCase().includes(q)) return true;
+        return (n.parts || []).some(p =>
+          p.type === 'thought' && (p.text || '').toLowerCase().includes(q));
+      });
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.className = 'nav-item nav-empty';
+        empty.textContent = nodes.length ? 'Ничего не подошло под фильтр' : 'Нод пока нет';
+        list.appendChild(empty);
         return;
       }
-
-      matches.forEach(n => {
-        const el = document.createElement('div');
-        el.className = 'search-result';
-        const title = n.title || '(без названия)';
+      shown.forEach(n => {
+        const item = document.createElement('div');
+        item.className = 'nav-item';
         const thought = (n.parts || []).find(p => p.type === 'thought');
-        const text = thought ? (thought.text || '') : '';
-        const preview = text.length > 60 ? text.slice(0, 60) + '…' : text;
-        el.innerHTML = '<div class="search-result-title"></div>' +
-                       (preview ? '<div class="search-result-text"></div>' : '');
-        el.querySelector('.search-result-title').textContent = title;
-        if (preview) el.querySelector('.search-result-text').textContent = preview;
-        el.addEventListener('click', () => {
-          closeSearch();
+        const base = (n.title && n.title.trim()) ? n.title.trim()
+          : (thought && (thought.text || '').trim()) ? (thought.text || '').trim()
+          : '(пустая нода)';
+        const icons = ((n.parts || []).some(p => p.type === 'audio') ? ' 🎤' : '') +
+                      ((n.parts || []).some(p => p.type === 'image') ? ' 🖼' : '');
+        item.textContent = base + icons;
+        item.title = base;
+        item.dataset.nodeId = n.id;
+        item.addEventListener('dblclick', () => {
           setSelection([n.id]);
           centerOn(n);
         });
-        results.appendChild(el);
+        list.appendChild(item);
       });
-      results.style.display = 'block';
     }
 
-    input.addEventListener('input', e => {
-      clearTimeout(timer);
-      timer = setTimeout(() => doSearch(e.target.value), 200);
+    toggle.addEventListener('click', () => {
+      if (panel.style.display === 'none') openPanel(); else closePanel();
     });
-
-    input.addEventListener('keydown', e => {
+    filter.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(rebuild, 150);
+    });
+    filter.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        closeSearch();
+        if (filter.value) { filter.value = ''; rebuild(); }
+        else closePanel();
+      }
+    });
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) &&
+          (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А')) {
+        e.preventDefault();
+        openPanel();
       }
     });
 
-    document.addEventListener('keydown', e => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А')) {
-        e.preventDefault();
-        panel.style.display = 'block';
-        toggle.style.display = 'none';
-        input.focus();
-        input.select();
-      }
-    });
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(rebuild, 150); };
+    Bus.on('entity:created', schedule);
+    Bus.on('entity:changed', schedule);
+    Bus.on('entities:deleted', schedule);
+    Bus.on('entity:restored', schedule);
+    Bus.on('project:open', schedule);
+    Bus.on('project:created', schedule);
+    rebuild();
   }
 
   function init(board) {
@@ -262,9 +269,9 @@ const Compose = (() => {
 
     boardEl.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      if (e.target.isContentEditable) return;   // в режиме правки мышь работает с текстом
-      if (e.target.closest('.socket')) return;   // гнёзда ведёт graph, не compose
-      e.preventDefault();                        // хват без нативного выделения
+      if (e.target.isContentEditable) return;
+      if (e.target.closest('.socket')) return;
+      e.preventDefault();
       const ae = document.activeElement;
       if (ae && ae.isContentEditable) ae.blur();
       pointer = { x: e.clientX, y: e.clientY };
@@ -335,7 +342,7 @@ const Compose = (() => {
     boardEl.addEventListener('dblclick', e => {
       if (e.target.closest('.node') || e.target.closest('.block') ||
           e.target.closest('.palette') || e.target.closest('.mic-pill') ||
-          e.target.closest('.edges-svg') || e.target.closest('.search-box')) return;
+          e.target.closest('.edges-svg') || e.target.closest('.nav-box')) return;
       scale = 1; ox = 0; oy = 0; applyView();
     });
 
@@ -357,7 +364,7 @@ const Compose = (() => {
           !e.ctrlKey && !e.metaKey) fitAll();
     });
 
-    initSearch();
+    initNavigator();
   }
 
   return { init, deleteSelected, deleteEmpty, deleteNodes, setSelection,
