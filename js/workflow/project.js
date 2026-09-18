@@ -1,11 +1,16 @@
 // L4: проектная оболочка. Создать/открыть/сохранить/сохранить как;
-// адаптер хранилища (D11); память последней папки; запись и чтение медиа.
+// адаптер хранилища (D11); память последней папки; запись и чтение медиа;
+// автовосстановление последнего проекта; bak-копия и защита от чужой записи.
 const Project = (() => {
   let dirHandle = null;
   let data = null;
   let dirty = false;
   let saveTimer = null;
+  let loading = false;          // пока true — сейв и автосейв молчат
+  let loadedModified = null;    // meta.modified на момент загрузки/записи
+  let skipDangerOnce = false;   // разовое «пишу поверх сознательно» (restore bak)
   const FILE = 'data.json';
+  const BAK = 'data.json.bak';
 
   // --- Память последней папки (IndexedDB) ---
   function idb() {
@@ -45,14 +50,11 @@ const Project = (() => {
       entities: [], edges: [], blocks: [], trash: []
     };
   }
-
   function hasFS() { return !!window.showDirectoryPicker; }
-
   function hint(text) {
     const el = document.querySelector('.board-hint');
     if (el) el.textContent = text;
   }
-
   function refreshTitle() {
     const name = data ? data.meta.name : null;
     document.title = name ? 'ДОСКА — ' + name + (dirty ? ' *' : '') : 'ДОСКА';
@@ -67,16 +69,15 @@ const Project = (() => {
     }
     Bus.emit('project:changed', { data: data, dirty: dirty });
   }
-
   function markDirty() {
     dirty = true;
     refreshTitle();
+    if (loading) return;               // гонка при загрузке убита
     if (dirHandle) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => save(true), 800);
     }
   }
-
   function serializeData() {
     const clean = JSON.parse(JSON.stringify(data));
     (clean.entities || []).forEach(n =>
@@ -95,6 +96,11 @@ const Project = (() => {
     const fh = await dh.getFileHandle(FILE);
     const f = await fh.getFile();
     return JSON.parse(await f.text());
+  }
+  async function readTextViaHandle(dh, name) {
+    const fh = await dh.getFileHandle(name);
+    const f = await fh.getFile();
+    return await f.text();
   }
   async function writeMedia(name, blob) {
     if (!dirHandle) return null;
@@ -119,7 +125,6 @@ const Project = (() => {
       return URL.createObjectURL(f);
     } catch (e) { return null; }
   }
-
   async function writeText(name, text) {
     if (!dirHandle) return null;
     try {
@@ -133,19 +138,15 @@ const Project = (() => {
 
   // --- Адаптер B: фолбэк download/upload ---
   function download() {
-    const blob = new Blob([serializeData()],
-              { type: 'application/json' });
+    const blob = new Blob([serializeData()], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = FILE;
-    a.click();
+    a.href = URL.createObjectURL(blob); a.download = FILE; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   function upload() {
     return new Promise((resolve, reject) => {
       const inp = document.createElement('input');
-      inp.type = 'file';
-      inp.accept = '.json,application/json';
+      inp.type = 'file'; inp.accept = '.json,application/json';
       inp.onchange = () => {
         const f = inp.files[0];
         if (!f) return reject(new Error('отменено'));
@@ -158,17 +159,56 @@ const Project = (() => {
     });
   }
 
+  // --- Загрузка с предохранителем loading ---
+  async function loadFrom(dh) {
+    loading = true;
+    try {
+      const d = await readViaHandle(dh);
+      dirHandle = dh;
+      await idbSet('lastDir', dh);
+      data = d;
+      dirty = false;
+      loadedModified = (d.meta && d.meta.modified) || null;
+      refreshTitle();
+      Bus.emit('project:open', { data: d });
+    } finally {
+      loading = false;
+    }
+  }
+
+  // --- Автовосстановление последнего проекта (только чтение) ---
+  async function tryRestoreLast(force) {
+    if (!hasFS()) return false;
+    const stored = await lastDir();
+    if (!stored) return false;
+    try {
+      let perm = await stored.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        if (!force) {
+          hint('Последний проект: папка «' + stored.name + '». Продолжить: Файл → Продолжить последний проект.');
+          return false;
+        }
+        perm = await stored.requestPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') return false;
+      }
+      await loadFrom(stored);
+      return true;
+    } catch (e) { return false; }
+  }
+  function continueLast() { return tryRestoreLast(true); }
+
   // --- Операции ---
   function createNew() {
     data = emptyData();
     dirHandle = null;
+    loadedModified = null;
     dirty = true;
     refreshTitle();
     Bus.emit('project:created', { data: data });
   }
 
   async function save(silent) {
-    if (!data) return;
+    if (!data || loading) return;
     data.meta.modified = Date.now();
     let saved = false;
     try {
@@ -191,7 +231,38 @@ const Project = (() => {
         }
         if (dirHandle) await idbSet('lastDir', dirHandle);
       }
-      if (dirHandle) { await writeViaHandle(); saved = true; }
+      if (dirHandle) {
+        let oldText = null;
+        try { oldText = await readTextViaHandle(dirHandle, FILE); } catch (e) { oldText = null; }
+        if (oldText !== null) {
+          try {                                   // bak прежнего содержимого
+            const bak = await dirHandle.getFileHandle(BAK, { create: true });
+            const wb = await bak.createWritable();
+            await wb.write(oldText);
+            await wb.close();
+          } catch (e) {}
+          let danger = false;
+          try {
+            const old = JSON.parse(oldText);
+            const otherLineage = !!(old.meta && data.meta && old.meta.created !== data.meta.created);
+            const newer = !!(old.meta && loadedModified !== null &&
+                             (old.meta.modified || 0) > loadedModified);
+            danger = otherLineage || newer;
+          } catch (e) {}
+          if (danger && !skipDangerOnce) {
+            if (silent) {
+              hint('Автосейв пропущен: data.json изменился извне (другое окно?). Ctrl+S — сохранить вручную.');
+              return;
+            }
+            if (!confirm('data.json в папке изменился извне или принадлежит другому проекту.\n' +
+                         'Перезаписать его текущей версией? Прежняя копия останется в data.json.bak.')) return;
+          }
+        }
+        skipDangerOnce = false;
+        await writeViaHandle();
+        saved = true;
+        loadedModified = data.meta.modified;
+      }
     } catch (e) { /* падаем в фолбэк */ }
     if (!saved) download();
     dirty = false;
@@ -215,59 +286,28 @@ const Project = (() => {
   }
 
   async function open() {
-    let d = null, dh = null;
+    let dh = null;
     if (hasFS()) {
       try {
         const stored = await lastDir();
         dh = await window.showDirectoryPicker({
           mode: 'readwrite', startIn: dirHandle || stored || undefined });
-        d = await readViaHandle(dh);
       } catch (e) {
         if (e && e.name === 'AbortError') return;
-        if (e && e.name === 'NotFoundError') {
-          alert('В выбранной папке нет data.json');
-          return;
-        }
-        dh = null; d = null;
+        dh = null;
       }
     }
-    if (!d) {
-      try { d = await upload(); } catch (e) { return; }
-    }
-    dirHandle = dh;
-    if (dirHandle) await idbSet('lastDir', dirHandle);
-    data = d;
-    dirty = false;
-    refreshTitle();
-    Bus.emit('project:open', { data: data });
-  }
-
-    function rename() {
-    if (!data) return;
-    const next = prompt('Имя проекта:', data.meta.name || '');
-    if (next === null) return;
-    const clean = next.trim();
-    if (!clean) return;
-    data.meta.name = clean;
-    refreshTitle();
-    markDirty();
-    Bus.emit('project:renamed', { name: clean });
-  }
-
-  function init() {
-    document.addEventListener('keydown', e => {
-      const k = e.key.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'ы')) {
-        e.preventDefault();
-        save(false);
+    if (dh) {
+      try { await loadFrom(dh); return; }
+      catch (e) {
+        if (e && e.name === 'NotFoundError') { alert('В выбранной папке нет data.json'); return; }
       }
-    });
-    createNew();
-  }
-
-  return {
-    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia, writeText, rename,
-    getData: () => data,
-    hasHandle: () => !!dirHandle
-  };
-})();
+    }
+    try {
+      const d = await upload();
+      loading = true;
+      data = d; dirty = false;
+      loadedModified = (d.meta && d.meta.modified) || null;
+      refreshTitle();
+      Bus.emit('project:open', { data: d });
+    }

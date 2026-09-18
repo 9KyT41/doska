@@ -63,7 +63,9 @@
           { label: 'Открыть проект…', action: function () { Project.open(); } },
           { label: 'Сохранить',       action: function () { Project.save(false); } },
           { label: 'Сохранить как…',  action: function () { Project.saveAs(); } },
-          { label: 'Переименовать проект…', action: function () { Project.rename(); } }
+          { label: 'Переименовать проект…', action: function () { Project.rename(); } },
+          { label: 'Продолжить последний проект', action: function () { Project.continueLast(); } },
+          { label: 'Вернуть из data.json.bak',    action: function () { Project.restoreBackup(); } }
         ]},
         { label: 'Правка', children: [
           { label: 'Удалить выделенное (Del)', action: function () { Compose.deleteSelected(); } },
