@@ -6,9 +6,9 @@ const Project = (() => {
   let data = null;
   let dirty = false;
   let saveTimer = null;
-  let loading = false;          // пока true — сейв и автосейв молчат
-  let loadedModified = null;    // meta.modified на момент загрузки/записи
-  let skipDangerOnce = false;   // разовое «пишу поверх сознательно» (restore bak)
+  let loading = false;
+  let loadedModified = null;
+  let skipDangerOnce = false;
   const FILE = 'data.json';
   const BAK = 'data.json.bak';
 
@@ -72,7 +72,7 @@ const Project = (() => {
   function markDirty() {
     dirty = true;
     refreshTitle();
-    if (loading) return;               // гонка при загрузке убита
+    if (loading) return;
     if (dirHandle) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => save(true), 800);
@@ -235,7 +235,7 @@ const Project = (() => {
         let oldText = null;
         try { oldText = await readTextViaHandle(dirHandle, FILE); } catch (e) { oldText = null; }
         if (oldText !== null) {
-          try {                                   // bak прежнего содержимого
+          try {
             const bak = await dirHandle.getFileHandle(BAK, { create: true });
             const wb = await bak.createWritable();
             await wb.write(oldText);
@@ -303,11 +303,65 @@ const Project = (() => {
         if (e && e.name === 'NotFoundError') { alert('В выбранной папке нет data.json'); return; }
       }
     }
+    loading = true;
     try {
       const d = await upload();
-      loading = true;
-      data = d; dirty = false;
+      data = d;
+      dirty = false;
       loadedModified = (d.meta && d.meta.modified) || null;
       refreshTitle();
       Bus.emit('project:open', { data: d });
-    }
+    } catch (e) { return; }
+    finally { loading = false; }
+  }
+
+  async function restoreBackup() {
+    const dh = dirHandle || (await lastDir());
+    if (!dh) { alert('Нет папки проекта — не из чего восстанавливать.'); return; }
+    loading = true;
+    try {
+      const txt = await readTextViaHandle(dh, BAK);
+      const d = JSON.parse(txt);
+      dirHandle = dh;
+      data = d;
+      dirty = true;
+      skipDangerOnce = true;
+      refreshTitle();
+      Bus.emit('project:open', { data: d });
+      await save(false);
+    } catch (e) {
+      alert('Резервная копия data.json.bak не найдена или не читается.');
+    } finally { loading = false; }
+  }
+
+  function rename() {
+    if (!data) return;
+    const next = prompt('Имя проекта:', data.meta.name || '');
+    if (next === null) return;
+    const clean = next.trim();
+    if (!clean) return;
+    data.meta.name = clean;
+    refreshTitle();
+    markDirty();
+    Bus.emit('project:renamed', { name: clean });
+  }
+
+  function init() {
+    document.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 's' || k === 'ы')) {
+        e.preventDefault();
+        save(false);
+      }
+    });
+    createNew();
+    tryRestoreLast(false);
+  }
+
+  return {
+    init, createNew, save, saveAs, open, markDirty, writeMedia, readMedia, writeText,
+    rename, continueLast, restoreBackup,
+    getData: () => data,
+    hasHandle: () => !!dirHandle
+  };
+})();
